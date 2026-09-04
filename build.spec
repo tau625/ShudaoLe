@@ -36,6 +36,8 @@ a = Analysis(
     binaries=[],
     datas=[
         ('smartedu_webui.html', '.'),
+        # 版本号单一来源：界面显示与 exe 文件属性都从它解析，发版只改这一处
+        ('version_info.txt', '.'),
     ],
     hiddenimports=[
         'requests',

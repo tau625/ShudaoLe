@@ -274,7 +274,7 @@
       </div>
     </div>
     <div class="top-meta">
-      <span class="ver">v1.0.0</span>
+      <span class="ver" id="app-ver">v1.0.2</span>
       <a href="https://github.com/tau625/ShudaoLe" target="_blank" rel="noopener">GitHub 项目页</a>
     </div>
   </header>
@@ -1057,6 +1057,21 @@
     }
     new MutationObserver(paint).observe(el, { childList: true, characterData: true, subtree: true });
   })();
+</script>
+<script>
+// 版本号由后端 /api/status 提供，来源是 version_info.txt（与 exe 文件属性同源），
+// 避免发版时漏改硬编码。取不到就保留 HTML 里写的静态兜底值。
+(function () {
+  fetch('/api/status')
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      var el = document.getElementById('app-ver');
+      if (el && d && d.version && d.version !== 'unknown') {
+        el.textContent = 'v' + d.version;
+      }
+    })
+    .catch(function () { /* 网络异常时保留静态兜底值 */ });
+})();
 </script>
 </body>
 </html>

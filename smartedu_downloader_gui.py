@@ -19,6 +19,7 @@ import argparse
 import ctypes
 import json
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -51,6 +52,28 @@ import auto_fetch_token  # noqa: E402  一键令牌抓取（进程内调用，�
 
 HTML_FILE = _RESOURCE_DIR / "smartedu_webui.html"
 DEFAULT_PORT = 8765
+
+
+def app_version() -> str:
+    """界面显示用的版本号，直接解析 version_info.txt。
+
+    与 exe 文件属性里的版本同源（打包时该文件随 exe 进 _internal，见 build.spec
+    的 datas），因此发版只改 version_info.txt 一处，界面与文件属性自动同步——
+    不会再出现「属性已是 1.0.1、界面还写着 1.0.0」这类漏改。
+
+    解析失败返回 "unknown"：版本号只用于展示，不该因此让服务起不来。
+    """
+    try:
+        text = (_RESOURCE_DIR / "version_info.txt").read_text(encoding="utf-8")
+        m = re.search(r"StringStruct\(u'FileVersion',\s*u'([^']+)'\)", text)
+        if m:
+            return m.group(1)
+    except OSError:
+        pass
+    return "unknown"
+
+
+APP_VERSION = app_version()
 
 # ========== 一键获取令牌（进程内线程调用 auto_fetch_token.run_token_fetch） ==========
 # 令牌抓取逻辑整合进 GUI 进程内运行（import auto_fetch_token 模块），不再 subprocess
@@ -509,6 +532,7 @@ class Handler(BaseHTTPRequestHandler):
                     "out_dir": STATE.get("out_dir", ""),
                     "started_at": STATE["started_at"],
                     "finished_at": STATE["finished_at"],
+                    "version": APP_VERSION,
                 }
             self._send_json(payload)
         else:
