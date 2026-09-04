@@ -6,44 +6,88 @@
 <title>书到了 · 教材下载</title>
 <style>
   :root {
-    --bg: #f5f7fa; --card: #ffffff; --line: #e5e7eb;
-    --text: #1f2937; --muted: #6b7280; --primary: #2563eb;
-    --primary-hover: #1d4ed8; --primary-disabled: #93b4f5;
-    --focus-ring: #bfdbfe;
-    --success-bg: #dcfce7; --success-fg: #15803d;
-    --danger-bg: #fee2e2; --danger-fg: #b91c1c; --danger-border: #f3c1c1;
-    --warning-bg: #fef3c7; --warning-fg: #b45309;
-    --info-bg: #eef6ff; --info-fg: #1d4ed8;
-    --note-bg: #fff8e6; --note-fg: #8a5a00; --note-border: #ffe2a8; --note-strong: #b26a00;
-    --surface-2: #f8fafc; --input-bg: #fbfcfe; --code-bg: #eef2f7;
-    --pending-bg: #f3f4f6; --pending-fg: #6b7280;
-    --working-bg: #dbeafe; --working-fg: #1d4ed8;
+    --bg: #f5f2ea; --card: #fffefb; --line: #e7e1d3; --line-soft: #efe9db;
+    --text: #2c2820; --muted: #8d8370;
+    --primary: #b23a2e; --primary-hover: #992e23; --primary-disabled: #d9a8a1;
+    --accent: #2f5d8a;
+    --focus-ring: #efc9c2;
+    --success-bg: #e2f2e7; --success-fg: #1c7a44;
+    --danger-bg: #fdeae8; --danger-fg: #b3261e; --danger-border: #f2c4bd;
+    --warning-bg: #fbf0d3; --warning-fg: #9a6b00;
+    --info-bg: #e9f0f8; --info-fg: #2f5d8a;
+    --note-bg: #fdf6e4; --note-fg: #8a5a00; --note-border: #ecdcb0; --note-strong: #a86a00;
+    --surface-2: #faf7ef; --input-bg: #fdfcf7; --code-bg: #f0ebdd;
+    --pending-bg: #f2eee2; --pending-fg: #8d8370;
+    --working-bg: #e9f0f8; --working-fg: #2f5d8a;
+    --seal: #b23a2e;
   }
   * { box-sizing: border-box; }
   body {
     background: var(--bg); color: var(--text); margin: 0;
     font: 14px/1.6 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
   }
-  .wrap { max-width: 960px; margin: 0 auto; padding: 26px 16px 56px; }
-  header h1 { font-size: 22px; margin: 0 0 4px; }
-  header .sub { color: var(--muted); margin: 0 0 20px; font-size: 13px; }
+  ::selection { background: #f0d6cf; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { background: #d8cfba; border-radius: 99px; border: 2px solid var(--bg); }
+  ::-webkit-scrollbar-track { background: transparent; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 26px 16px 56px; }
+
+  /* ---- 顶部品牌区 ---- */
+  .top {
+    display: flex; align-items: flex-end; justify-content: space-between;
+    gap: 16px; margin-bottom: 24px; flex-wrap: wrap;
+  }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .seal {
+    width: 52px; height: 52px; border-radius: 12px; flex: none;
+    background: var(--seal); color: #fff8f2;
+    display: flex; align-items: center; justify-content: center;
+    font: 700 27px/1 "KaiTi", "STKaiti", serif;
+    box-shadow: 0 3px 10px rgba(178,58,46,.32), inset 0 0 0 2px rgba(255,248,242,.4);
+  }
+  .top h1 {
+    font-size: 26px; margin: 0; letter-spacing: 3px;
+    font-family: "Noto Serif SC", "Songti SC", "STSong", Georgia, serif;
+  }
+  .top .sub { color: var(--muted); margin: 3px 0 0; font-size: 13px; }
+  .top-meta { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); }
+  .top-meta .ver {
+    background: var(--surface-2); border: 1px solid var(--line);
+    border-radius: 99px; padding: 2px 10px;
+  }
+  .top-meta a { color: var(--accent); text-decoration: none; }
+  .top-meta a:hover { text-decoration: underline; }
 
   .card {
-    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
-    padding: 16px 18px; margin-bottom: 16px; box-shadow: 0 1px 2px rgba(0,0,0,.04);
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 18px 20px; margin-bottom: 18px;
+    box-shadow: 0 1px 3px rgba(60,50,30,.05), 0 6px 16px rgba(60,50,30,.04);
   }
-  .card h2 { font-size: 16px; margin: 0 0 12px; }
+  .card h2 {
+    font-size: 16px; margin: 0 0 14px;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  }
+  .step {
+    width: 24px; height: 24px; border-radius: 8px; flex: none;
+    background: var(--seal); color: #fff8f2;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 13px; font-weight: 700;
+    box-shadow: 0 2px 6px rgba(178,58,46,.3);
+  }
+  .h2-right { margin-left: auto; }
 
   textarea {
-    width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 10px;
-    font: 13px/1.5 Consolas, "Microsoft YaHei", monospace; resize: vertical; background: var(--input-bg);
+    width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+    font: 13px/1.55 Consolas, "Microsoft YaHei", monospace; resize: vertical; background: var(--input-bg);
   }
+  textarea::placeholder, input::placeholder { color: #b8af9c; }
   textarea:focus, input:focus, select:focus {
     outline: 2px solid var(--focus-ring); border-color: var(--primary);
   }
   input[type=text], input[type=password], input[type=number] {
     border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--input-bg);
   }
+  input[type=checkbox] { accent-color: var(--primary); }
   button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible {
     outline: 2px solid var(--focus-ring); outline-offset: 1px; border-color: var(--primary);
   }
@@ -55,20 +99,27 @@
 
   details.help { margin-top: 12px; font-size: 13px; color: var(--muted); }
   details.help summary { cursor: pointer; user-select: none; }
+  details.help summary:hover { color: var(--text); }
   details.help ol { margin: 8px 0 2px 20px; padding: 0; }
   code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
 
   .btns { display: flex; gap: 10px; align-items: center; margin-top: 16px; }
-  button { border: none; border-radius: 8px; padding: 9px 24px; font-size: 14px; cursor: pointer; }
-  button.primary { background: var(--primary); color: #fff; }
+  button { border: none; border-radius: 9px; padding: 9px 24px; font-size: 14px; cursor: pointer; }
+  button.primary {
+    background: var(--primary); color: #fff; font-weight: 600;
+    box-shadow: 0 2px 8px rgba(178,58,46,.28);
+  }
   button.primary:hover:not(:disabled) { background: var(--primary-hover); }
-  button.primary:disabled { background: var(--primary-disabled); cursor: not-allowed; }
+  button.primary:disabled { background: var(--primary-disabled); box-shadow: none; cursor: not-allowed; }
   button.danger { background: #fff; color: var(--danger-fg); border: 1px solid var(--danger-border); }
   button.danger:not(:disabled):hover { background: var(--danger-bg); }
   button.danger:disabled { color: #d1d5db; border-color: var(--line); cursor: not-allowed; }
   .summary { color: var(--muted); font-size: 13px; margin-left: 6px; }
+  .summary b { font-weight: 700; }
+  .sum-ok { color: var(--success-fg); }
+  .sum-skip { color: var(--warning-fg); }
+  .sum-fail { color: var(--danger-fg); }
 
-  .token-box { margin-top: 12px; border: 1px dashed var(--line); border-radius: 10px; padding: 12px 14px; background: var(--surface-2); }
   .token-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
   .token-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); flex: 1 1 320px; }
   .token-field input { margin-top: 2px; width: 100%; box-sizing: border-box; }
@@ -77,11 +128,21 @@
   .token-status.waiting { background: var(--info-bg); color: var(--info-fg); }
   .token-status.done { background: var(--success-bg); color: var(--success-fg); }
   .token-status.error { background: var(--danger-bg); color: var(--danger-fg); }
+  .token-badge { font-size: 11px; padding: 2px 9px; border-radius: 99px; font-weight: 400; }
+  .token-badge.ok { background: var(--success-bg); color: var(--success-fg); }
+  .token-badge.warn { background: var(--warning-bg); color: var(--warning-fg); }
+
+  .link-meta {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: 6px; font-size: 12px; color: var(--muted); min-height: 18px;
+  }
+  .link-meta #link-count { color: var(--primary); font-weight: 600; }
 
   .table-wrap { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 13px; }
-  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
-  th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  thead th { background: var(--surface-2); color: var(--muted); font-weight: 600; font-size: 12px; }
+  tbody tr:hover { background: #faf6ec; }
   .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .msg { color: var(--muted); font-size: 12px; word-break: break-all; }
   .empty { text-align: center; color: var(--muted); padding: 20px 0 !important; }
@@ -93,18 +154,18 @@
   .badge.pending { background: var(--pending-bg); color: var(--pending-fg); }
   .badge.parsing, .badge.downloading { background: var(--working-bg); color: var(--working-fg); }
 
-  .bar { height: 8px; background: #eef1f5; border-radius: 99px; overflow: hidden; margin-top: 5px; }
+  .bar { height: 8px; background: #efe9db; border-radius: 99px; overflow: hidden; margin-top: 5px; }
   .bar > div { height: 100%; width: 0; background: var(--primary); border-radius: 99px; transition: width .25s; }
   .bar.indet > div {
     width: 40%;
-    background: linear-gradient(90deg, #93c5fd, #2563eb, #93c5fd);
+    background: linear-gradient(90deg, #d98880, #b23a2e, #d98880);
     animation: slide 1.2s linear infinite;
   }
   @keyframes slide { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
   .size { font-size: 11px; color: var(--muted); margin-top: 3px; min-height: 15px; }
 
   pre#log {
-    background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px;
+    background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px;
     padding: 10px 12px; max-height: 240px; overflow: auto; margin: 0;
     font: 12px/1.55 Consolas, "Microsoft YaHei", monospace; white-space: pre-wrap; word-break: break-all;
   }
@@ -114,8 +175,8 @@
     border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px;
     background: var(--input-bg); font-size: 13px; min-width: 110px;
   }
-  button.ghost { background: #fff; color: var(--primary); border: 1px solid #c7d7f5; }
-  button.ghost:hover:not(:disabled) { background: #f0f5ff; }
+  button.ghost { background: #fff; color: var(--accent); border: 1px solid #c9d7e6; }
+  button.ghost:hover:not(:disabled) { background: var(--info-bg); }
   button.small-btn { padding: 5px 14px; font-size: 13px; }
   .dir-input { display: flex; gap: 6px; align-items: stretch; }
   .dir-input input { flex: 1; min-width: 0; }
@@ -125,7 +186,7 @@
   .cat-status.cat-err { color: var(--danger-fg); font-weight: 600; }
   .scope-note {
     font-size: 12px; color: var(--note-fg); background: var(--note-bg);
-    border: 1px solid var(--note-border); border-radius: 6px; padding: 6px 10px; margin: 8px 0 2px;
+    border: 1px solid var(--note-border); border-radius: 8px; padding: 6px 10px; margin: 8px 0 2px;
   }
   .scope-note b { color: var(--note-strong); }
   select option:disabled { color: #b9b9b9; }
@@ -133,13 +194,13 @@
     display: flex; align-items: center; gap: 10px;
     margin: 12px 0 8px; font-size: 13px; color: var(--muted);
   }
-  .cat-table-wrap { max-height: 320px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; }
+  .cat-table-wrap { max-height: 340px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; }
   .cat-table-wrap table { margin: 0; }
   .cat-table-wrap thead th {
-    position: sticky; top: 0; background: var(--card); z-index: 1;
+    position: sticky; top: 0; background: var(--surface-2); z-index: 1;
     border-bottom: 1px solid var(--line);
   }
-  .cat-table-wrap td { border-bottom: 1px solid #f1f3f6; }
+  .cat-table-wrap td { border-bottom: 1px solid var(--line-soft); }
   .cat-row-note { font-size: 12px; color: var(--muted); margin-top: 8px; }
   #cat-count { font-weight: 600; color: var(--text); }
   .kind-tag {
@@ -153,13 +214,13 @@
   .chips {
     display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
     margin: 10px 0 2px; padding: 8px 10px;
-    background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px;
+    background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px;
   }
   .chips-label { font-size: 12px; color: var(--muted); margin-right: 2px; }
   .chip {
     display: inline-flex; align-items: center; gap: 4px;
     padding: 3px 6px 3px 10px; border-radius: 99px; font-size: 12px;
-    background: var(--info-bg); color: var(--info-fg); border: 1px solid var(--focus-ring);
+    background: var(--info-bg); color: var(--info-fg); border: 1px solid #c9d7e6;
   }
   .chip button {
     border: none; background: transparent; color: inherit; cursor: pointer;
@@ -179,11 +240,11 @@
   /* ---- 提示条（toast）---- */
   #toast {
     position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
-    max-width: min(480px, calc(100vw - 32px)); padding: 10px 16px; border-radius: 8px;
-    font-size: 13px; box-shadow: 0 4px 16px rgba(0,0,0,.12); z-index: 999;
+    max-width: min(480px, calc(100vw - 32px)); padding: 10px 16px; border-radius: 10px;
+    font-size: 13px; box-shadow: 0 4px 16px rgba(60,50,30,.16); z-index: 999;
     display: none; background: var(--danger-bg); color: var(--danger-fg); border: 1px solid var(--danger-border);
   }
-  #toast.info { background: var(--info-bg); color: var(--info-fg); border-color: var(--focus-ring); }
+  #toast.info { background: var(--info-bg); color: var(--info-fg); border-color: #c9d7e6; }
   #toast.show { display: block; }
 
   /* ---- 响应式 ---- */
@@ -196,19 +257,33 @@
     #token { max-width: 100%; }
     #output { width: 100%; }
     .btns { flex-wrap: wrap; }
+    .seal { width: 44px; height: 44px; font-size: 22px; }
+    .top h1 { font-size: 22px; }
   }
 </style>
 </head>
 <body>
 <div id="toast" role="alert"></div>
 <div class="wrap">
-  <header>
-    <h1>书到了 <span style="font-size:14px;color:var(--muted);font-weight:400;">· 教材下载</span></h1>
-    <p class="sub">粘贴教材详情页链接或 contentId（每行一个），自动解析真实 PDF 地址并批量下载；文件以教材名保存到指定目录。</p>
+  <header class="top">
+    <div class="brand">
+      <div class="seal">书</div>
+      <div>
+        <h1>书到了</h1>
+        <p class="sub">ShudaoLe · 国家中小学智慧教育平台教材一键下载</p>
+      </div>
+    </div>
+    <div class="top-meta">
+      <span class="ver">v1.0.0</span>
+      <a href="https://github.com/tau625/ShudaoLe" target="_blank" rel="noopener">GitHub 项目页</a>
+    </div>
   </header>
 
   <section class="card">
-    <h2>从目录选择教材 <span id="cat-status" class="cat-status">加载中...</span></h2>
+    <h2><span class="step">1</span>选择教材
+      <span id="cat-status" class="cat-status">加载中...</span>
+      <button id="btn-reload-catalog" class="ghost small-btn h2-right">刷新目录</button>
+    </h2>
     <div class="scope-note">
       当前启用版本：<b>人教系列</b>（人教版 / 统编版 / 人教鄂教版）与 <b>沪教版</b>；其余版本已隐藏。
       版本下拉中点<b>「人教版系（整套）」</b>可一次涵盖人教全部主科，也可在分组内精确选单个版本
@@ -222,7 +297,6 @@
       <label data-dim="volume">册次 <select id="f-volume"></select></label>
       <label>关键词 <input id="f-kw" type="text" placeholder="书名 / 科目 / 版本，支持 册次:上册" style="width:170px"></label>
       <label class="chk"><input id="f-res" type="checkbox"> 含课件资源</label>
-      <button id="btn-reload-catalog" class="ghost small-btn">刷新目录</button>
     </div>
     <div id="filter-chips" class="chips" hidden></div>
     <div class="cat-result-bar">
@@ -250,10 +324,40 @@
   </section>
 
   <section class="card">
-    <h2>下载任务
-      <button id="btn-clear-links" class="ghost small-btn" style="margin-left:12px" title="清空下方链接输入框">清空链接</button>
+    <h2><span class="step">2</span>登录令牌
+      <span id="token-badge" class="token-badge warn">未设置</span>
+    </h2>
+    <div class="token-row">
+      <label class="token-field">登录令牌
+        <input id="token" type="password" placeholder="一键获取，或手动粘贴 x-nd-auth">
+      </label>
+      <button id="btn-auto-token" class="primary small-btn">一键登录获取令牌</button>
+      <button id="btn-abort-token" class="ghost small-btn" hidden>放弃</button>
+      <label class="chk"><input id="save_token" type="checkbox" checked> 记住令牌（token.txt）</label>
+    </div>
+    <div id="token-status" class="token-status" hidden></div>
+    <details class="help">
+      <summary>为什么需要令牌？（平台对 PDF 下载启用鉴权，匿名请求返回 401/403）</summary>
+      <p>点上方<b>「一键登录获取令牌」</b>：会弹出一个浏览器窗口，你在里面用手机号/扫码登录
+      <code>basic.smartedu.cn</code>，登录成功后工具会自动抓到令牌并填好，无需手动复制。</p>
+      <p>若自动获取不可用（如未装 Edge/Chrome），也可手动获取后粘贴：</p>
+      <ol>
+        <li>浏览器登录 <code>https://basic.smartedu.cn</code></li>
+        <li>按 <code>F12</code> → <b>网络/Network</b> → 过滤框输入 <code>pdf</code></li>
+        <li>刷新页面，点 <code>pdf.pdf</code> 请求 → <b>请求标头</b> 里复制 <code>x-nd-auth</code> 值</li>
+      </ol>
+    </details>
+  </section>
+
+  <section class="card">
+    <h2><span class="step">3</span>下载任务
+      <button id="btn-clear-links" class="ghost small-btn h2-right" title="清空下方链接输入框">清空链接</button>
     </h2>
     <textarea id="links" rows="7" placeholder="每行一个教材详情页链接或 contentId，支持 # 注释。例如:&#10;https://basic.smartedu.cn/tchMaterial/detail?contentType=assets_document&amp;contentId=xxxxxxxx&amp;catalogType=tchMaterial&amp;subCatalog=tchMaterial"></textarea>
+    <div class="link-meta">
+      <span id="link-count"></span>
+      <span>支持 # 开头的注释行</span>
+    </div>
     <div class="row">
       <label>保存目录
         <span class="dir-input">
@@ -272,28 +376,6 @@
         <input id="flat_name" type="checkbox"> 纯书名命名
       </label>
     </div>
-    <div class="token-box">
-      <div class="token-row">
-        <label class="token-field">登录令牌
-          <input id="token" type="password" placeholder="一键获取，或手动粘贴 x-nd-auth">
-        </label>
-        <button id="btn-auto-token" class="primary small-btn">一键登录获取令牌</button>
-        <button id="btn-abort-token" class="ghost small-btn" hidden>放弃</button>
-        <label class="chk"><input id="save_token" type="checkbox" checked> 记住令牌（token.txt）</label>
-      </div>
-      <div id="token-status" class="token-status" hidden></div>
-      <details class="help">
-        <summary>为什么需要令牌？（平台对 PDF 下载启用鉴权，匿名请求返回 401/403）</summary>
-        <p>点上方<b>「一键登录获取令牌」</b>：会弹出一个浏览器窗口，你在里面用手机号/扫码登录
-        <code>basic.smartedu.cn</code>，登录成功后工具会自动抓到令牌并填好，无需手动复制。</p>
-        <p>若自动获取不可用（如未装 Edge/Chrome），也可手动获取后粘贴：</p>
-        <ol>
-          <li>浏览器登录 <code>https://basic.smartedu.cn</code></li>
-          <li>按 <code>F12</code> → <b>网络/Network</b> → 过滤框输入 <code>pdf</code></li>
-          <li>刷新页面，点 <code>pdf.pdf</code> 请求 → <b>请求标头</b> 里复制 <code>x-nd-auth</code> 值</li>
-        </ol>
-      </details>
-    </div>
     <div class="btns">
       <button id="btn-start" class="primary">开始下载</button>
       <button id="btn-stop" class="danger" disabled>停止</button>
@@ -302,7 +384,7 @@
   </section>
 
   <section class="card">
-    <h2>任务列表</h2>
+    <h2><span class="step">4</span>任务列表</h2>
     <div class="table-wrap">
       <table>
         <thead>
@@ -319,7 +401,7 @@
   </section>
 
   <section class="card">
-    <h2>运行日志</h2>
+    <h2><span class="step">5</span>运行日志</h2>
     <pre id="log"></pre>
   </section>
 </div>
@@ -932,6 +1014,49 @@
     if (log) log.textContent = (log.textContent === '（暂无日志）' ? '' : log.textContent + '\n') + msg;
     // 同时尝试通过后端写日志（若在运行则并入共享日志）
   }
+
+  /* ---------- 纯展示增强（不触碰任何原逻辑）----------
+     1) 链接计数：输入框下方实时显示有效链接条数（排除 # 注释行）。
+     2) 令牌徽标：卡片标题旁显示「已设置 / 未设置」。
+     两者均监听 input 事件；程序化赋值（自动清理链接、自动填令牌）不触发 input，
+     故用低频轮询兜底，保证显示始终一致。 */
+  (function () {
+    const linksTa = $('#links');
+    const countEl = $('#link-count');
+    const badgeEl = $('#token-badge');
+    if (!linksTa || !countEl || !badgeEl) return;
+    function refreshMeta() {
+      const n = linksTa.value.split('\n')
+        .filter(s => s.trim() && !s.trim().startsWith('#')).length;
+      countEl.textContent = n ? n + ' 条链接' : '';
+      const has = $('#token').value.trim().length > 0;
+      badgeEl.textContent = has ? '已设置' : '未设置';
+      badgeEl.className = 'token-badge ' + (has ? 'ok' : 'warn');
+    }
+    linksTa.addEventListener('input', refreshMeta);
+    $('#token').addEventListener('input', refreshMeta);
+    setInterval(refreshMeta, 1500);
+    refreshMeta();
+  })();
+
+  // 汇总数字着色：只读 #summary 的文本变化并替换为带色 HTML，
+  // 原 render() 的赋值逻辑不变。
+  (function () {
+    const el = $('#summary');
+    if (!el) return;
+    let last = '';
+    function paint() {
+      const t = el.textContent;
+      if (!t || t === last) return;
+      const m = t.match(/成功 (\d+) · 跳过 (\d+) · 失败 (\d+) \/ 共 (\d+)/);
+      if (!m) return;
+      last = t;
+      el.innerHTML = '本次运行: 成功 <b class="sum-ok">' + m[1] + '</b>'
+        + ' · 跳过 <b class="sum-skip">' + m[2] + '</b>'
+        + ' · 失败 <b class="sum-fail">' + m[3] + '</b> / 共 ' + m[4];
+    }
+    new MutationObserver(paint).observe(el, { childList: true, characterData: true, subtree: true });
+  })();
 </script>
 </body>
 </html>
