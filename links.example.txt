@@ -1,0 +1,9 @@
+# 国家中小学智慧教育平台 - 批量下载示例文件
+# 用法: python smartedu_downloader.py -f links.example.txt
+# 规则: 每行一个教材详情页链接或 contentId；空行与 # 开头的行会被忽略
+
+# 示例：小学语文一年级上册（详情页链接）
+https://basic.smartedu.cn/tchMaterial/detail?contentType=assets_document&contentId=e7bdb372-0590-11ed-9c79-92fc3b3249d5&catalogType=tchMaterial&subCatalog=tchMaterial
+
+# 也可以直接写 contentId（去掉注释即可生效）:
+# e7bdb372-0590-11ed-9c79-92fc3b3249d5

@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>书到了 · 教材下载</title>
+<style>
+  :root {
+    --bg: #f5f7fa; --card: #ffffff; --line: #e5e7eb;
+    --text: #1f2937; --muted: #6b7280; --primary: #2563eb;
+    --primary-hover: #1d4ed8; --primary-disabled: #93b4f5;
+    --focus-ring: #bfdbfe;
+    --success-bg: #dcfce7; --success-fg: #15803d;
+    --danger-bg: #fee2e2; --danger-fg: #b91c1c; --danger-border: #f3c1c1;
+    --warning-bg: #fef3c7; --warning-fg: #b45309;
+    --info-bg: #eef6ff; --info-fg: #1d4ed8;
+    --note-bg: #fff8e6; --note-fg: #8a5a00; --note-border: #ffe2a8; --note-strong: #b26a00;
+    --surface-2: #f8fafc; --input-bg: #fbfcfe; --code-bg: #eef2f7;
+    --pending-bg: #f3f4f6; --pending-fg: #6b7280;
+    --working-bg: #dbeafe; --working-fg: #1d4ed8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg); color: var(--text); margin: 0;
+    font: 14px/1.6 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 26px 16px 56px; }
+  header h1 { font-size: 22px; margin: 0 0 4px; }
+  header .sub { color: var(--muted); margin: 0 0 20px; font-size: 13px; }
+
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px 18px; margin-bottom: 16px; box-shadow: 0 1px 2px rgba(0,0,0,.04);
+  }
+  .card h2 { font-size: 16px; margin: 0 0 12px; }
+
+  textarea {
+    width: 100%; border: 1px solid var(--line); border-radius: 8px; padding: 10px;
+    font: 13px/1.5 Consolas, "Microsoft YaHei", monospace; resize: vertical; background: var(--input-bg);
+  }
+  textarea:focus, input:focus, select:focus {
+    outline: 2px solid var(--focus-ring); border-color: var(--primary);
+  }
+  input[type=text], input[type=password], input[type=number] {
+    border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--input-bg);
+  }
+  button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible {
+    outline: 2px solid var(--focus-ring); outline-offset: 1px; border-color: var(--primary);
+  }
+  .row { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 12px; align-items: flex-end; }
+  .row label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+  .row label.chk { flex-direction: row; align-items: center; gap: 6px; padding-bottom: 9px; }
+  #output { width: 240px; }
+  .small { width: 84px; }
+
+  details.help { margin-top: 12px; font-size: 13px; color: var(--muted); }
+  details.help summary { cursor: pointer; user-select: none; }
+  details.help ol { margin: 8px 0 2px 20px; padding: 0; }
+  code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+
+  .btns { display: flex; gap: 10px; align-items: center; margin-top: 16px; }
+  button { border: none; border-radius: 8px; padding: 9px 24px; font-size: 14px; cursor: pointer; }
+  button.primary { background: var(--primary); color: #fff; }
+  button.primary:hover:not(:disabled) { background: var(--primary-hover); }
+  button.primary:disabled { background: var(--primary-disabled); cursor: not-allowed; }
+  button.danger { background: #fff; color: var(--danger-fg); border: 1px solid var(--danger-border); }
+  button.danger:not(:disabled):hover { background: var(--danger-bg); }
+  button.danger:disabled { color: #d1d5db; border-color: var(--line); cursor: not-allowed; }
+  .summary { color: var(--muted); font-size: 13px; margin-left: 6px; }
+
+  .token-box { margin-top: 12px; border: 1px dashed var(--line); border-radius: 10px; padding: 12px 14px; background: var(--surface-2); }
+  .token-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; }
+  .token-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); flex: 1 1 320px; }
+  .token-field input { margin-top: 2px; width: 100%; box-sizing: border-box; }
+  #token { max-width: 360px; }
+  .token-status { margin-top: 10px; padding: 8px 12px; border-radius: 8px; font-size: 13px; }
+  .token-status.waiting { background: var(--info-bg); color: var(--info-fg); }
+  .token-status.done { background: var(--success-bg); color: var(--success-fg); }
+  .token-status.error { background: var(--danger-bg); color: var(--danger-fg); }
+
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .msg { color: var(--muted); font-size: 12px; word-break: break-all; }
+  .empty { text-align: center; color: var(--muted); padding: 20px 0 !important; }
+
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 99px; font-size: 12px; white-space: nowrap; }
+  .badge.ok { background: var(--success-bg); color: var(--success-fg); }
+  .badge.fail { background: var(--danger-bg); color: var(--danger-fg); }
+  .badge.skip { background: var(--warning-bg); color: var(--warning-fg); }
+  .badge.pending { background: var(--pending-bg); color: var(--pending-fg); }
+  .badge.parsing, .badge.downloading { background: var(--working-bg); color: var(--working-fg); }
+
+  .bar { height: 8px; background: #eef1f5; border-radius: 99px; overflow: hidden; margin-top: 5px; }
+  .bar > div { height: 100%; width: 0; background: var(--primary); border-radius: 99px; transition: width .25s; }
+  .bar.indet > div {
+    width: 40%;
+    background: linear-gradient(90deg, #93c5fd, #2563eb, #93c5fd);
+    animation: slide 1.2s linear infinite;
+  }
+  @keyframes slide { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
+  .size { font-size: 11px; color: var(--muted); margin-top: 3px; min-height: 15px; }
+
+  pre#log {
+    background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px 12px; max-height: 240px; overflow: auto; margin: 0;
+    font: 12px/1.55 Consolas, "Microsoft YaHei", monospace; white-space: pre-wrap; word-break: break-all;
+  }
+
+  /* ---- 目录筛选 ---- */
+  select {
+    border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px;
+    background: var(--input-bg); font-size: 13px; min-width: 110px;
+  }
+  button.ghost { background: #fff; color: var(--primary); border: 1px solid #c7d7f5; }
+  button.ghost:hover:not(:disabled) { background: #f0f5ff; }
+  button.small-btn { padding: 5px 14px; font-size: 13px; }
+  .dir-input { display: flex; gap: 6px; align-items: stretch; }
+  .dir-input input { flex: 1; min-width: 0; }
+  button.act-btn { padding: 3px 10px; font-size: 12px; margin: 4px 6px 0 0; }
+  .open-acts { margin-top: 5px; }
+  .cat-status { font-size: 12px; color: var(--muted); font-weight: 400; margin-left: 8px; }
+  .cat-status.cat-err { color: var(--danger-fg); font-weight: 600; }
+  .scope-note {
+    font-size: 12px; color: var(--note-fg); background: var(--note-bg);
+    border: 1px solid var(--note-border); border-radius: 6px; padding: 6px 10px; margin: 8px 0 2px;
+  }
+  .scope-note b { color: var(--note-strong); }
+  select option:disabled { color: #b9b9b9; }
+  .cat-result-bar {
+    display: flex; align-items: center; gap: 10px;
+    margin: 12px 0 8px; font-size: 13px; color: var(--muted);
+  }
+  .cat-table-wrap { max-height: 320px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; }
+  .cat-table-wrap table { margin: 0; }
+  .cat-table-wrap thead th {
+    position: sticky; top: 0; background: var(--card); z-index: 1;
+    border-bottom: 1px solid var(--line);
+  }
+  .cat-table-wrap td { border-bottom: 1px solid #f1f3f6; }
+  .cat-row-note { font-size: 12px; color: var(--muted); margin-top: 8px; }
+  #cat-count { font-weight: 600; color: var(--text); }
+  .kind-tag {
+    display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 4px;
+    font-size: 11px; background: var(--pending-bg); color: var(--pending-fg);
+    vertical-align: 1px;
+  }
+  .btn-add[disabled] { color: var(--success-fg); border-color: var(--success-bg); background: var(--success-bg); cursor: default; }
+
+  /* ---- 已选条件（筛选 chips）---- */
+  .chips {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+    margin: 10px 0 2px; padding: 8px 10px;
+    background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px;
+  }
+  .chips-label { font-size: 12px; color: var(--muted); margin-right: 2px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 3px 6px 3px 10px; border-radius: 99px; font-size: 12px;
+    background: var(--info-bg); color: var(--info-fg); border: 1px solid var(--focus-ring);
+  }
+  .chip button {
+    border: none; background: transparent; color: inherit; cursor: pointer;
+    font-size: 14px; line-height: 1; padding: 0 2px; border-radius: 99px;
+  }
+  .chip button:hover { background: rgba(0,0,0,.08); }
+  .chip-clear {
+    margin-left: auto; border: none; background: transparent; cursor: pointer;
+    font-size: 12px; color: var(--muted); text-decoration: underline; padding: 2px 4px;
+  }
+  .chip-clear:hover { color: var(--danger-fg); }
+
+  /* ---- 空结果放宽建议 ---- */
+  .hint-row { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 8px; }
+  .hint-row .ghost { background: #fff; }
+
+  /* ---- 提示条（toast）---- */
+  #toast {
+    position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
+    max-width: min(480px, calc(100vw - 32px)); padding: 10px 16px; border-radius: 8px;
+    font-size: 13px; box-shadow: 0 4px 16px rgba(0,0,0,.12); z-index: 999;
+    display: none; background: var(--danger-bg); color: var(--danger-fg); border: 1px solid var(--danger-border);
+  }
+  #toast.info { background: var(--info-bg); color: var(--info-fg); border-color: var(--focus-ring); }
+  #toast.show { display: block; }
+
+  /* ---- 响应式 ---- */
+  .row label { flex: 1 1 130px; min-width: 110px; }
+  #token { max-width: 360px; }
+  @media (max-width: 720px) {
+    .wrap { padding: 18px 12px 40px; }
+    .row { gap: 10px; }
+    .row label { flex: 1 1 100%; }
+    #token { max-width: 100%; }
+    #output { width: 100%; }
+    .btns { flex-wrap: wrap; }
+  }
+</style>
+</head>
+<body>
+<div id="toast" role="alert"></div>
+<div class="wrap">
+  <header>
+    <h1>书到了 <span style="font-size:14px;color:var(--muted);font-weight:400;">· 教材下载</span></h1>
+    <p class="sub">粘贴教材详情页链接或 contentId（每行一个），自动解析真实 PDF 地址并批量下载；文件以教材名保存到指定目录。</p>
+  </header>
+
+  <section class="card">
+    <h2>从目录选择教材 <span id="cat-status" class="cat-status">加载中...</span></h2>
+    <div class="scope-note">
+      当前启用版本：<b>人教系列</b>（人教版 / 统编版 / 人教鄂教版）与 <b>沪教版</b>；其余版本已隐藏。
+      版本下拉中点<b>「人教版系（整套）」</b>可一次涵盖人教全部主科，也可在分组内精确选单个版本
+      （平台把语文标成"统编版"、数学标成"人教版"，两者都属人教）。学段暂只开放<b>小学</b>。
+    </div>
+    <div class="row" style="margin-top:2px">
+      <label data-dim="phase">学段 <select id="f-phase"></select></label>
+      <label data-dim="grade">年级 <select id="f-grade"></select></label>
+      <label data-dim="subject">科目 <select id="f-subject"></select></label>
+      <label data-dim="publisher">版本 <select id="f-publisher"></select></label>
+      <label data-dim="volume">册次 <select id="f-volume"></select></label>
+      <label>关键词 <input id="f-kw" type="text" placeholder="书名 / 科目 / 版本，支持 册次:上册" style="width:170px"></label>
+      <label class="chk"><input id="f-res" type="checkbox"> 含课件资源</label>
+      <button id="btn-reload-catalog" class="ghost small-btn">刷新目录</button>
+    </div>
+    <div id="filter-chips" class="chips" hidden></div>
+    <div class="cat-result-bar">
+      <span id="cat-count">命中 0 条</span>
+      <button id="btn-add-all" class="primary small-btn" disabled>全部加入下载列表</button>
+      <span class="cat-row-note">点"加入"会把教材链接追加到下方下载列表，再点"开始下载"即可</span>
+    </div>
+    <div class="table-wrap cat-table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:46%">教材名称</th>
+            <th style="width:9%">年级</th>
+            <th style="width:13%">科目</th>
+            <th style="width:9%">册次</th>
+            <th style="width:13%">版本 / 变体</th>
+            <th style="width:10%"></th>
+          </tr>
+        </thead>
+        <tbody id="cat-body">
+          <tr><td colspan="6" class="empty">目录加载中...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>下载任务
+      <button id="btn-clear-links" class="ghost small-btn" style="margin-left:12px" title="清空下方链接输入框">清空链接</button>
+    </h2>
+    <textarea id="links" rows="7" placeholder="每行一个教材详情页链接或 contentId，支持 # 注释。例如:&#10;https://basic.smartedu.cn/tchMaterial/detail?contentType=assets_document&amp;contentId=xxxxxxxx&amp;catalogType=tchMaterial&amp;subCatalog=tchMaterial"></textarea>
+    <div class="row">
+      <label>保存目录
+        <span class="dir-input">
+          <input id="output" type="text" value="downloads">
+          <button id="btn-browse" type="button" class="ghost small-btn"
+                  title="用资源管理器选择保存目录">浏览…</button>
+        </span>
+      </label>
+      <label>重试次数
+        <input id="retries" class="small" type="number" value="3" min="1" max="10">
+      </label>
+      <label>超时（秒）
+        <input id="timeout" class="small" type="number" value="30" min="5" max="120">
+      </label>
+      <label class="chk" title="默认用「学段科目_版本_年级册次」结构化命名，勾选则用纯书名">
+        <input id="flat_name" type="checkbox"> 纯书名命名
+      </label>
+    </div>
+    <div class="token-box">
+      <div class="token-row">
+        <label class="token-field">登录令牌
+          <input id="token" type="password" placeholder="一键获取，或手动粘贴 x-nd-auth">
+        </label>
+        <button id="btn-auto-token" class="primary small-btn">一键登录获取令牌</button>
+        <button id="btn-abort-token" class="ghost small-btn" hidden>放弃</button>
+        <label class="chk"><input id="save_token" type="checkbox" checked> 记住令牌（token.txt）</label>
+      </div>
+      <div id="token-status" class="token-status" hidden></div>
+      <details class="help">
+        <summary>为什么需要令牌？（平台对 PDF 下载启用鉴权，匿名请求返回 401/403）</summary>
+        <p>点上方<b>「一键登录获取令牌」</b>：会弹出一个浏览器窗口，你在里面用手机号/扫码登录
+        <code>basic.smartedu.cn</code>，登录成功后工具会自动抓到令牌并填好，无需手动复制。</p>
+        <p>若自动获取不可用（如未装 Edge/Chrome），也可手动获取后粘贴：</p>
+        <ol>
+          <li>浏览器登录 <code>https://basic.smartedu.cn</code></li>
+          <li>按 <code>F12</code> → <b>网络/Network</b> → 过滤框输入 <code>pdf</code></li>
+          <li>刷新页面，点 <code>pdf.pdf</code> 请求 → <b>请求标头</b> 里复制 <code>x-nd-auth</code> 值</li>
+        </ol>
+      </details>
+    </div>
+    <div class="btns">
+      <button id="btn-start" class="primary">开始下载</button>
+      <button id="btn-stop" class="danger" disabled>停止</button>
+      <span id="summary" class="summary"></span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>任务列表</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:76px">状态</th>
+            <th style="width:30%">教材 / 输入</th>
+            <th style="width:30%">进度</th>
+            <th>信息</th>
+          </tr>
+        </thead>
+        <tbody id="tasks"><tr><td colspan="4" class="empty">尚无任务，请在上方粘贴链接后点击"开始下载"</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>运行日志</h2>
+    <pre id="log"></pre>
+  </section>
+</div>
+
+<script>
+  const $ = s => document.querySelector(s);
+
+  // 内联提示条（替代 alert），kind: '' | 'info'
+  let _toastTimer = null;
+  function toast(msg, kind = '') {
+    const el = $('#toast');
+    if (!el) return;
+    el.textContent = msg;
+    el.className = kind ? 'info show' : 'show';
+    clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(() => { el.className = ''; }, 4000);
+  }
+
+  function escapeHtml(t) {
+    return (t ?? '').toString().replace(/[&<>"']/g,
+      c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function fmtSize(n) {
+    if (!n && n !== 0) return '';
+    if (n < 1024) return n + ' B';
+    if (n < 1048576) return (n / 1024).toFixed(1) + ' KB';
+    return (n / 1048576).toFixed(1) + ' MB';
+  }
+
+  function badge(status) {
+    const map = {
+      ok: ['成功', 'ok'], skip: ['跳过', 'skip'], fail: ['失败', 'fail'],
+      pending: ['等待中', 'pending'], parsing: ['解析中', 'parsing'],
+      downloading: ['下载中', 'downloading'],
+    };
+    const [text, cls] = map[status] || [status, 'pending'];
+    return `<span class="badge ${cls}">${text}</span>`;
+  }
+
+  function render(s) {
+    const tb = $('#tasks');
+    if (!s.items.length) {
+      tb.innerHTML = '<tr><td colspan="4" class="empty">尚无任务，请在上方粘贴链接后点击"开始下载"</td></tr>';
+    } else {
+      tb.innerHTML = s.items.map(it => {
+        let bar, size = '';
+        if (it.status === 'downloading' && !(it.total > 0)) {
+          bar = '<div class="bar indet"><div></div></div>';
+          size = it.downloaded > 0 ? fmtSize(it.downloaded) : '';
+        } else if (it.total > 0) {
+          const pct = Math.min(100, it.downloaded * 100 / it.total);
+          bar = `<div class="bar"><div style="width:${pct.toFixed(1)}%"></div></div>`;
+          size = `${fmtSize(it.downloaded)} / ${fmtSize(it.total)}（${pct.toFixed(0)}%）`;
+        } else {
+          bar = '<div class="bar"><div></div></div>';
+        }
+        const name = it.title || it.entry;
+        // ok/skip 时 msg 是文件路径，太占地方；做成小字且用按钮操作
+        let info, infoTitle = '';
+        if (it.status === 'ok' || it.status === 'skip') {
+          info = it.status === 'ok' ? '✅ 已保存' : '已存在（跳过）';
+          infoTitle = it.file ? it.file : (it.msg || '');
+        } else {
+          info = it.msg || (it.status === 'pending' ? '等待处理' : '');
+          infoTitle = '';
+        }
+        // 完成/跳过时若已知文件路径，展示"打开文件 / 打开所在目录"按钮
+        let acts = '';
+        if ((it.status === 'ok' || it.status === 'skip') && it.file) {
+          acts = `<div class="open-acts">
+            <button class="ghost small-btn act-btn" data-mode="file" data-path="${escapeHtml(it.file)}">打开文件</button>
+            <button class="ghost small-btn act-btn" data-mode="reveal" data-path="${escapeHtml(it.file)}">打开所在目录</button>
+          </div>`;
+        } else if (it.status === 'ok' && !it.file && s.out_dir) {
+          acts = `<div class="open-acts">
+            <button class="ghost small-btn act-btn" data-mode="dir" data-path="${escapeHtml(s.out_dir)}">打开所在目录</button>
+          </div>`;
+        }
+        return `<tr>
+          <td>${badge(it.status)}</td>
+          <td class="name" title="${escapeHtml(it.entry)}">${escapeHtml(name)}</td>
+          <td>${bar}<div class="size">${size}</div></td>
+          <td class="msg"><span title="${escapeHtml(infoTitle)}">${escapeHtml(info)}</span>${acts}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    $('#summary').textContent = s.summary
+      ? `本次运行: 成功 ${s.summary.ok} · 跳过 ${s.summary.skip} · 失败 ${s.summary.fail} / 共 ${s.summary.total}`
+      : '';
+
+    $('#btn-start').disabled = s.running;
+    $('#btn-stop').disabled = !s.running;
+    $('#btn-stop').textContent = s.cancel ? '正在停止...' : '停止';
+
+    const log = $('#log');
+    log.textContent = (s.log && s.log.length) ? s.log.join('\n') : '（暂无日志）';
+    log.scrollTop = log.scrollHeight;
+  }
+
+  // 追踪"运行中"状态，用于检测一次下载任务从运行 → 结束的瞬间，
+  // 从而自动清除已成功的链接（避免下次加新书时重复下载旧链接）。
+  let _wasRunning = false;
+
+  // 根据本次任务结果，自动从链接输入框中移除"已成功 / 已跳过"的链接，
+  // 只保留"失败"的（方便用户补下载）。返回移除条数。
+  function clearDoneLinks(items) {
+    const ta = $('#links');
+    const lines = ta.value.split('\n').map(s => s.trim()).filter(Boolean);
+    if (!lines.length) return 0;
+    // 建立"链接 -> 是否已完结(ok/skip)"的映射。entry 即原始链接文本。
+    const done = new Set();
+    items.forEach(it => {
+      if (it.status === 'ok' || it.status === 'skip') done.add(it.entry);
+    });
+    // 兼容：条目可能以 contentId 形式记录，按行精确匹配
+    const kept = lines.filter(line => !done.has(line));
+    const removed = lines.length - kept.length;
+    if (removed > 0) {
+      ta.value = kept.length ? kept.join('\n') + '\n' : '';
+      toast(`已自动清除 ${removed} 条已完成的链接，剩余 ${kept.length} 条待处理`, 'info');
+    }
+    return removed;
+  }
+
+  async function refresh() {
+    try {
+      const r = await fetch('/api/status');
+      if (r.ok) {
+        const s = await r.json();
+        render(s);
+        // 检测一次任务运行结束：此前在运行、现在已停止，且确有任务结果
+        if (_wasRunning && !s.running && s.items && s.items.length) {
+          clearDoneLinks(s.items);
+        }
+        _wasRunning = s.running;
+      }
+    } catch (e) { /* 服务未就绪，忽略 */ }
+    setTimeout(refresh, 700);
+  }
+
+  $('#btn-start').onclick = async () => {
+    const body = {
+      links_text: $('#links').value,
+      output_dir: $('#output').value.trim() || 'downloads',
+      token: $('#token').value.trim(),
+      save_token: $('#save_token').checked,
+      flat_name: $('#flat_name').checked,
+      retries: +$('#retries').value || 3,
+      timeout: +$('#timeout').value || 30,
+    };
+    try {
+      const r = await fetch('/api/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const j = await r.json();
+      if (!r.ok) toast(j.error || '启动失败');
+    } catch (e) {
+      toast('无法连接下载服务，请确认 smartedu_downloader_gui.py 正在运行');
+    }
+  };
+
+  $('#btn-stop').onclick = async () => {
+    try { await fetch('/api/cancel', { method: 'POST' }); } catch (e) {}
+  };
+
+  $('#btn-clear-links').onclick = () => {
+    const ta = $('#links');
+    if (!ta.value.trim()) { toast('链接列表已经是空的', 'info'); return; }
+    ta.value = '';
+    ta.focus();
+    toast('已清空链接输入框', 'info');
+  };
+
+  /* ---------- 一键获取令牌 ---------- */
+  let autoTokenTimer = null;
+  const tokenStatus = $('#token-status');
+  const btnAuto = $('#btn-auto-token');
+  const btnAbort = $('#btn-abort-token');
+
+  function showTokenStatus(cls, text) {
+    if (text) {
+      tokenStatus.className = 'token-status ' + cls;
+      tokenStatus.textContent = text;
+      tokenStatus.hidden = false;
+    } else {
+      tokenStatus.hidden = true;
+      tokenStatus.textContent = '';
+    }
+  }
+
+  function stopAutoTokenPolling() {
+    if (autoTokenTimer) { clearInterval(autoTokenTimer); autoTokenTimer = null; }
+    btnAuto.disabled = false;
+    btnAbort.hidden = true;
+  }
+
+  async function pollAutoToken() {
+    let st;
+    try {
+      const r = await fetch('/api/auto-token/status');
+      st = await r.json();
+    } catch (e) { stopAutoTokenPolling(); showTokenStatus('error', '无法连接服务'); return; }
+
+    if (st.phase === 'waiting' || st.phase === 'starting') {
+      showTokenStatus('waiting', '⏳ ' + (st.message || '等待登录...') +
+        '（若窗口里已是登录态，刷新一下页面即可触发捕获）');
+      return;                     // 继续轮询
+    }
+    if (st.phase === 'done') {
+      stopAutoTokenPolling();
+      $('#token').value = st.token;
+      showTokenStatus('done', '✅ 已自动获取并保存令牌（来源：' + (st.message || '自动捕获') + '）。' +
+        '令牌已填入上方输入框并写入 token.txt，之后可直接点击"开始下载"。');
+      return;
+    }
+    if (st.phase === 'error') {
+      stopAutoTokenPolling();
+      showTokenStatus('error', '❌ ' + (st.error || '自动获取令牌失败'));
+      return;
+    }
+    // idle / 用户放弃
+    stopAutoTokenPolling();
+    if (st.message === '已放弃') showTokenStatus('', '');   // 放弃则静默收起
+  }
+
+  btnAuto.onclick = async () => {
+    btnAuto.disabled = true;
+    btnAbort.hidden = false;
+    showTokenStatus('waiting', '正在启动浏览器，请稍候...');
+    // 自愈兜底：先调一次 abort 让任何残留状态归零（幂等，无残留时也是 noop + ok:true）
+    try { await fetch('/api/auto-token/abort', { method: 'POST' }); } catch (e) {}
+    let j;
+    try {
+      const r = await fetch('/api/auto-token', { method: 'POST' });
+      j = await r.json();
+      if (!r.ok) throw new Error(j.error || '启动失败');
+    } catch (e) {
+      stopAutoTokenPolling();
+      showTokenStatus('error', '❌ ' + e.message + '（若浏览器已弹出，可直接在里面登录）');
+      return;
+    }
+    if (!autoTokenTimer) autoTokenTimer = setInterval(pollAutoToken, 1000);
+    pollAutoToken();
+  };
+
+  btnAbort.onclick = async () => {
+    // 放弃时同步清状态条，并恢复按钮可用
+    try { await fetch('/api/auto-token/abort', { method: 'POST' }); } catch (e) {}
+    stopAutoTokenPolling();
+    showTokenStatus('waiting', '已请求结束，等待后端回收浏览器进程（1~3 秒）...');
+    // 短暂轮询确保 running 已经回到 false，再让用户重试
+    let n = 0;
+    const t = setInterval(async () => {
+      n++; if (n > 8) { clearInterval(t); showTokenStatus('', ''); btnAuto.disabled = false; return; }
+      try {
+        const r = await fetch('/api/auto-token/status');
+        const st = await r.json();
+        if (!st.running) { clearInterval(t); showTokenStatus('', ''); btnAuto.disabled = false; }
+      } catch (e) { clearInterval(t); showTokenStatus('', ''); btnAuto.disabled = false; }
+    }, 500);
+  };
+
+  // 兜底：页面加载时如果发现残留 waiting，也提供"放弃"按钮可用
+  (function () {
+    setInterval(async () => {
+      try {
+        const r = await fetch('/api/auto-token/status');
+        const st = await r.json();
+        if (st.running && st.phase === 'waiting' && btnAbort.hidden) {
+          btnAbort.hidden = false;
+          showTokenStatus('waiting', '⏳ 检测到上次流程未正常结束，可点"放弃"清理后再重试；'
+            + '或继续等待浏览器中登录完成。');
+        }
+      } catch (e) {}
+    }, 3000);
+  })();
+
+  /* ---------- 目录筛选选教材 ----------
+     选项内容与排序全部由后端 /api/facets 提供（后端统一规范化并按认知顺序排序），
+     前端只负责渲染与级联刷新，避免在两处各维护一份规则导致不一致。 */
+
+  const catLink = id =>
+    'https://basic.smartedu.cn/tchMaterial/detail?contentType=assets_document&contentId=' +
+    id + '&catalogType=tchMaterial&subCatalog=tchMaterial';
+
+  // 维度顺序由后端 enabled_dims 下发，默认即人的检索路径：
+  // 学段 → 年级 → 科目 → 版本 → 册次（先定几年级、什么科目，再挑版本与册次）
+  let DIMS = ['phase', 'grade', 'subject', 'publisher', 'volume'];
+  let ROWS = [];          // 当前展示的结果行（可能被 limit 截断）
+  let FACETS = {};        // 各维度候选值（后端按级联规则算出）
+  let SCOPE = {};         // 完整支持范围，范围外的选项禁用
+  let LABELS = {};        // 维度显示名
+  let HINTS = [];         // 空结果时的放宽建议
+  let TOTAL = 0;          // 命中总数（可能大于 ROWS.length）
+  let ADDED = new Set();  // 已加入下载列表的教材 id，用于按钮反馈
+  let reqSeq = 0;         // 请求序号：快速切换下拉时丢弃过期响应，避免旧结果盖掉新结果
+  let appliedDefault = false;  // 首屏预选是否已应用过（只应用一次，用户清空后不再强制）
+
+  function syncDimVisibility(dims) {
+    document.querySelectorAll('label[data-dim]').forEach(lb => {
+      lb.style.display = dims.includes(lb.dataset.dim) ? '' : 'none';
+    });
+  }
+
+  // 已选值若在新候选里消失（被其它维度的选择排除），显式告知而非静默重置——
+  // 否则用户以为条件还生效，看到的结果却对不上。
+  function restoreSelection(el, keep, stillThere, label) {
+    if (keep && !stillThere) {
+      el.value = '';
+      toast(`已取消「${label}：${keep}」——当前其它条件下没有该选项`, 'info');
+    } else {
+      el.value = keep || '';
+    }
+  }
+
+  function fillFacet(dim, options) {
+    const el = $('#f-' + dim);
+    if (!el) return;
+    const keep = el.value;
+    const allowed = SCOPE[dim] || null;
+    const html = ['<option value="">全部</option>'].concat(options.map(o => {
+      const inScope = !allowed || allowed.includes(o.value);
+      return `<option value="${escapeHtml(o.value)}"${inScope ? '' : ' disabled'}`
+        + `>${escapeHtml(o.value)}${inScope ? '' : '（暂未开放）'}（${o.count}）</option>`;
+    })).join('');
+    el.innerHTML = html;
+    restoreSelection(el, keep, options.some(o => o.value === keep), LABELS[dim] || dim);
+  }
+
+  // 版本是两级候选：分组（整套选）+ 组内真实标签（精确选）。平台把人教系的语文/
+  // 数学/科学标成了三个不同标签，只给分组则精确选不到"统编版"，只给标签则下全套
+  // 得选三次，两级并存才能同时容纳两种心智。
+  function fillPublisherFacet(options) {
+    const el = $('#f-publisher');
+    if (!el) return;
+    const keep = el.value;
+    const groups = [];
+    options.forEach(o => {
+      if (!o.group) return;
+      let g = groups.find(x => x.name === o.group);
+      if (!g) { g = { name: o.group, items: [] }; groups.push(g); }
+      g.items.push(o);
+    });
+    const optHtml = o =>
+      `<option value="${escapeHtml(o.value)}">${o.is_group ? '' : '　'}`
+      + `${escapeHtml(o.value)}${o.is_group ? '（整套）' : ''}（${o.count}）</option>`;
+    const top = options.filter(o => !o.group).map(optHtml).join('');
+    const grouped = groups.map(g =>
+      `<optgroup label="${escapeHtml(g.name)}">${g.items.map(optHtml).join('')}</optgroup>`
+    ).join('');
+    el.innerHTML = '<option value="">全部</option>' + top + grouped;
+    restoreSelection(el, keep, options.some(o => o.value === keep),
+                     LABELS.publisher || '版本');
+  }
+
+  function currentFilters() {
+    const f = {};
+    DIMS.forEach(d => {
+      const el = $('#f-' + d);
+      if (el && el.value) f[d] = el.value;
+    });
+    return f;
+  }
+
+  function filterParams() {
+    const params = new URLSearchParams();
+    const f = currentFilters();
+    Object.keys(f).forEach(k => params.set(k, f[k]));
+    const kw = $('#f-kw').value.trim();
+    if (kw) params.set('keyword', kw);
+    if ($('#f-res').checked) params.set('include_resources', '1');
+    return params;
+  }
+
+  function appendIds(ids) {
+    const ta = $('#links');
+    const lines = ta.value.split('\n').map(s => s.trim()).filter(Boolean);
+    const have = new Set(lines);
+    let n = 0;
+    ids.forEach(id => {
+      const u = catLink(id);
+      if (!have.has(u)) { lines.push(u); have.add(u); ADDED.add(id); n++; }
+    });
+    ta.value = lines.join('\n') + '\n';
+    ta.scrollTop = ta.scrollHeight;
+    return n;
+  }
+
+  // 已选条件一览 + 一键清空。级联筛选下很容易忘记自己选过什么，没有它就只能
+  // 挨个下拉去找、挨个拨回"全部"。
+  function renderChips() {
+    const box = $('#filter-chips');
+    const f = currentFilters();
+    const keys = Object.keys(f);
+    if (!keys.length) { box.hidden = true; box.innerHTML = ''; return; }
+    box.hidden = false;
+    box.innerHTML = '<span class="chips-label">已选条件</span>'
+      + keys.map(d => `<span class="chip">${escapeHtml(LABELS[d] || d)}：${escapeHtml(f[d])}`
+        + `<button type="button" data-clear="${d}" title="移除该条件">×</button></span>`).join('')
+      + '<button type="button" class="chip-clear" id="btn-clear-filters">清空全部</button>';
+    box.querySelectorAll('button[data-clear]').forEach(b => {
+      b.onclick = () => { const el = $('#f-' + b.dataset.clear); if (el) el.value = ''; reload(); };
+    });
+    $('#btn-clear-filters').onclick = () => {
+      DIMS.forEach(d => { const el = $('#f-' + d); if (el) el.value = ''; });
+      $('#f-kw').value = '';
+      reload();
+    };
+  }
+
+  function renderRows() {
+    const tbody = $('#cat-body');
+    const truncated = TOTAL > ROWS.length;
+    $('#cat-count').textContent = `命中 ${TOTAL} 条`
+      + (truncated ? `（展示前 ${ROWS.length} 条）` : '');
+    const btnAll = $('#btn-add-all');
+    btnAll.disabled = !ROWS.length;
+    btnAll.textContent = truncated && TOTAL
+      ? `全部加入下载列表（${TOTAL}）` : '全部加入下载列表';
+
+    if (!ROWS.length) {
+      const tips = HINTS.map(h =>
+        `<button class="ghost small-btn" data-relax="${escapeHtml(h.dim)}">`
+        + `去掉「${escapeHtml(h.label)}：${escapeHtml(h.value)}」→ ${h.count} 条</button>`).join('');
+      tbody.innerHTML = `<tr><td colspan="6" class="empty"><div>没有匹配的教材。`
+        + (tips ? `放宽其中一个条件即可找回结果：</div><div class="hint-row">${tips}</div>`
+                : `试试放宽筛选条件</div>`)
+        + `</td></tr>`;
+      tbody.querySelectorAll('button[data-relax]').forEach(b => {
+        b.onclick = () => { const el = $('#f-' + b.dataset.relax); if (el) el.value = ''; reload(); };
+      });
+      return;
+    }
+
+    tbody.innerHTML = ROWS.map(x => {
+      // 版本与变体都可能为空，用 filter 拼接避免出现 "- · A版" 这种怪显示
+      const pub = [x.publisher, x.pub_variant].filter(Boolean).join(' · ') || '-';
+      const done = ADDED.has(x.id);
+      return `
+      <tr>
+        <td class="name" title="${escapeHtml(x.title)}">${escapeHtml(x.title)}`
+        + (x.kind && x.kind !== 'textbook' ? '<span class="kind-tag">课件/资源</span>' : '')
+        + `</td>
+        <td>${escapeHtml(x.grade || '-')}</td>
+        <td>${escapeHtml(x.subject || '-')}</td>
+        <td>${escapeHtml(x.volume || x.module || '-')}</td>
+        <td>${escapeHtml(pub)}</td>
+        <td><button class="ghost small-btn btn-add" data-id="${escapeHtml(x.id)}"`
+        + `${done ? ' disabled' : ''}>${done ? '已加入 ✓' : '加入'}</button></td>
+      </tr>`;
+    }).join('');
+    tbody.querySelectorAll('button[data-id]').forEach(btn => {
+      if (btn.disabled) return;
+      btn.onclick = () => {
+        appendIds([btn.dataset.id]);
+        btn.textContent = '已加入 ✓';
+        btn.disabled = true;
+      };
+    });
+  }
+
+  function renderFilters() {
+    DIMS.forEach(d => {
+      if (!FACETS[d]) return;
+      if (d === 'publisher') fillPublisherFacet(FACETS[d]);
+      else fillFacet(d, FACETS[d]);
+    });
+  }
+
+  // 任一维度变化都重新向后端取一次"级联后的候选值 + 命中结果"
+  async function reload(refresh = false) {
+    const seq = ++reqSeq;
+    const params = filterParams();
+    if (refresh) params.set('refresh', '1');
+    try {
+      const r = await fetch('/api/facets?' + params.toString());
+      const j = await r.json();
+      if (seq !== reqSeq) return;          // 已有更新的请求发出，丢弃过期响应
+      if (!r.ok || !j.ok) throw new Error(j.error || '加载失败');
+      ROWS = j.items; FACETS = j.facets || {}; SCOPE = j.scope || {};
+      LABELS = j.dim_labels || {}; TOTAL = j.total || 0; HINTS = j.relax_hints || [];
+      if (j.enabled_dims && j.enabled_dims.length) {
+        DIMS = j.enabled_dims;
+        syncDimVisibility(DIMS);
+      }
+      // 首屏替用户预选（如只开放小学时默认选小学）。否则用户面对的是全部学段
+      // 几千条混杂结果，而其它学段又因禁选点不动，得自己先想明白怎么回事。
+      if (!appliedDefault && j.default_filters) {
+        appliedDefault = true;
+        let changed = false;
+        Object.keys(j.default_filters).forEach(d => {
+          const el = $('#f-' + d);
+          if (el && !el.value) { el.value = j.default_filters[d]; changed = true; }
+        });
+        if (changed) return reload();
+      }
+      renderFilters();
+      renderChips();
+      renderRows();
+      // 数量统一由 cat-count 呈现，避免标题栏与结果栏两处数字打架
+      $('#cat-status').textContent = '';
+      $('#cat-status').className = 'cat-status';
+    } catch (e) {
+      $('#cat-status').textContent = '目录加载失败，请点击"刷新目录"重试';
+      $('#cat-status').className = 'cat-status cat-err';
+    }
+  }
+
+  // 用选择器统一绑定下拉：DIMS 由后端动态下发，写死在初始化时容易漏绑
+  document.querySelectorAll('select[id^="f-"]').forEach(el => {
+    el.onchange = () => reload();
+  });
+  $('#f-res').onchange = () => reload();
+  let kwTimer = null;
+  $('#f-kw').oninput = () => {
+    clearTimeout(kwTimer);
+    kwTimer = setTimeout(() => reload(), 300);
+  };
+  $('#btn-reload-catalog').onclick = () => {
+    $('#cat-status').textContent = '刷新中（需重新下载约 40MB，请稍候）...';
+    reload(true);
+  };
+  $('#btn-add-all').onclick = async () => {
+    // 界面只展示了前 N 条时先向后端要全量 id，否则用户以为加了全部，
+    // 实际只加进当前这一屏（截断是静默的，很容易被忽略）。
+    if (TOTAL > ROWS.length) {
+      try {
+        const p = filterParams();
+        p.set('ids_only', '1');
+        const r = await fetch('/api/facets?' + p.toString());
+        const j = await r.json();
+        if (j.ok && j.ids && j.ids.length) {
+          const n = appendIds(j.ids);
+          renderRows();
+          toast(`已加入 ${n} 条（共 ${TOTAL} 条）`, 'info');
+          return;
+        }
+      } catch (e) { /* 取全量失败则回退为只加当前展示的 */ }
+    }
+    const n = appendIds(ROWS.map(x => x.id));
+    renderRows();
+    toast(`已加入 ${n} 条`, 'info');
+  };
+
+  reload();
+  refresh();
+
+  /* ---------- 浏览选择目录 & 打开文件/目录 ---------- */
+  const outEl = $('#output');
+  const btnBrowse = $('#btn-browse');
+  if (btnBrowse) {
+    btnBrowse.onclick = async () => {
+      btnBrowse.disabled = true;
+      const old = btnBrowse.textContent;
+      btnBrowse.textContent = '选择中…';
+      try {
+        const r = await fetch('/api/choose-dir', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ start: (outEl.value || '').trim() }),
+        });
+        const j = await r.json();
+        if (r.ok && j.path) {
+          outEl.value = j.path;
+        } else if (j.cancelled) {
+          // 用户主动取消：不报错，保持原值
+        } else {
+          addLogLine('目录选择失败: ' + (j.error || '未知错误，请重试'));
+        }
+      } catch (e) {
+        addLogLine('无法连接服务选择目录');
+      } finally {
+        btnBrowse.disabled = false;
+        btnBrowse.textContent = old;
+      }
+    };
+  }
+
+  // 事件委托：任务列表里的"打开文件 / 打开所在目录"
+  $('#tasks').addEventListener('click', async (ev) => {
+    const btn = ev.target.closest('button[data-mode]');
+    if (!btn) return;
+    const mode = btn.dataset.mode;
+    const p = btn.dataset.path;
+    btn.disabled = true;
+    const old = btn.textContent;
+    btn.textContent = '打开中…';
+    try {
+      const r = await fetch('/api/open', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: p, mode: mode }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) addLogLine((j.error || '打开失败') + '：' + p);
+    } catch (e) {
+      addLogLine('无法连接服务打开文件');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = old;
+    }
+  });
+
+  function addLogLine(msg) {
+    const log = $('#log');
+    if (log) log.textContent = (log.textContent === '（暂无日志）' ? '' : log.textContent + '\n') + msg;
+    // 同时尝试通过后端写日志（若在运行则并入共享日志）
+  }
+</script>
+</body>
+</html>

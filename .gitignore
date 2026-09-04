@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# 构建产物
+dist/
+build/
+# 注意：不要写 *.spec —— build.spec 是本项目的打包配置，必须入库
+
+# 缓存文件
+catalog_cache.json
+token_cache.json
+
+# 敏感文件：登录令牌，一旦提交到公开仓库等于泄露账号凭据
+token.txt
+*.token
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# 工具内部目录（agent 工作日志，与项目本身无关）
+.workbuddy/
+
+# 系统文件
+Thumbs.db
+.DS_Store
