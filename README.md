@@ -31,7 +31,8 @@ smartedu-教材下载器/
 ├── app.ico                       # 程序图标（由 make_icon.py 生成）
 ├── version_info.txt              # Windows 版本资源（打包时写入 exe 文件属性）
 ├── build.spec                    # PyInstaller 打包配置（onedir 模式）
-├── build.bat                     # 一键打包脚本（双击即可重新出 exe + zip）
+├── build.bat                     # 一键打包入口（双击即可重新出 exe + zip）
+├── build.py                      # 打包逻辑本体（清理/图标/PyInstaller/打 zip，三平台可运行）
 ├── requirements.txt              # Python 依赖
 ├── links.example.txt             # 批量链接输入示例
 └── README.md                     # 本文件
