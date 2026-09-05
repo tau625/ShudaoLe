@@ -33,12 +33,15 @@
 """
 
 import argparse
+import ipaddress
 import json
 import os
 import re
+import socket
 import sys
 import time
 from pathlib import Path
+from urllib.parse import urlparse
 
 # ---------- 控制台 UTF-8 兼容（Windows GBK 控制台不至于乱码崩溃） ----------
 for _stream in (sys.stdout, sys.stderr):
@@ -189,6 +192,27 @@ def build_session(token=None):
     return session
 
 
+def validate_public_http_url(url):
+    """SSRF 防护：出站请求只放行 http/https，且 host 不得是本地/环回/
+    私有/保留地址（按域名解析出的全部 IP 判定）。请求地址可能来自远端
+    数据或用户粘贴的链接，统一过这道闸再真正发起请求。"""
+    parts = urlparse(url)
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        raise DownloadError(f"拒绝请求非法 URL: {url!r}")
+    host = parts.hostname
+    if host == "localhost" or host.endswith((".local", ".internal", ".home.arpa")):
+        raise DownloadError(f"拒绝请求本地主机名: {host}")
+    try:
+        addr_infos = socket.getaddrinfo(host, None)
+    except socket.gaierror as e:
+        raise DownloadError(f"域名解析失败: {host}（{e}）") from e
+    for info in addr_infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if not ip.is_global:
+            raise DownloadError(f"拒绝请求解析到非公网地址的主机: {host} -> {ip}")
+    return url
+
+
 def fetch_detail(cid, session, timeout):
     """轮询多个 CDN 端点获取教材详情 JSON"""
     last_err = None
@@ -196,7 +220,7 @@ def fetch_detail(cid, session, timeout):
     for tmpl in DETAIL_ENDPOINTS:
         url = tmpl.format(cid=cid)
         try:
-            resp = session.get(url, timeout=timeout)
+            resp = session.get(validate_public_http_url(url), timeout=timeout)
             if resp.status_code != 200:
                 last_err = f"HTTP {resp.status_code} @ {url.split('/')[2]}"
                 all_errs.append(last_err)
@@ -463,20 +487,20 @@ def sanitize_filename(name):
 
 def resolve_dest(out_dir, base_name):
     """确定目标文件路径。返回 (路径, 是否跳过)；
-    已存在同名且体积 >1MB 的文件视为已下载完成，跳过。"""
+    已存在同名且体积 >1MB 的文件视为已下载完成，跳过。
+    base_name 由远端书名生成，这里显式校验最终路径不会越出 out_dir。"""
+    out_root = out_dir.resolve()
     candidate = out_dir / f"{base_name}.pdf"
-    if not candidate.exists():
-        return candidate, False
-    if candidate.stat().st_size > 1_000_000:
-        return candidate, True
-    i = 2
+    i = 1
     while True:
-        candidate = out_dir / f"{base_name}({i}).pdf"
+        if not candidate.resolve().is_relative_to(out_root):
+            raise DownloadError(f"保存路径越界，拒绝写入: {candidate}")
         if not candidate.exists():
             return candidate, False
         if candidate.stat().st_size > 1_000_000:
             return candidate, True
         i += 1
+        candidate = out_dir / f"{base_name}({i}).pdf"
 
 
 # ---------- 进度显示 ----------
@@ -569,11 +593,14 @@ def download_file(urls, dest, session, retries=3, timeout=30, label="", on_progr
     for url in urls:
         for attempt in range(1, max(1, retries) + 1):
             tmp = dest.with_name(dest.name + ".part")
+            # dest 已由 resolve_dest 做过目录包含校验；对落盘的 .part 再显式校验一次
+            if not tmp.resolve().is_relative_to(dest.resolve().parent):
+                raise DownloadError(f"临时文件路径越界，拒绝写入: {tmp}")
             resp = None
             try:
                 resume = tmp.stat().st_size if tmp.exists() else 0
                 headers = {"Range": f"bytes={resume}-"} if resume else {}
-                resp = session.get(url, stream=True, timeout=timeout, headers=headers)
+                resp = session.get(validate_public_http_url(url), stream=True, timeout=timeout, headers=headers)
                 if resp.status_code in (401, 403):
                     raise NeedAuthError(f"HTTP {resp.status_code}")
                 if resp.status_code == 416:      # Range 越界：残留文件异常，重来
@@ -598,7 +625,7 @@ def download_file(urls, dest, session, retries=3, timeout=30, label="", on_progr
                 if on_progress is not None:
                     on_progress(sent, total)
                 need_magic = not continuing     # 续传时文件头已在 .part 里
-                with open(tmp, "ab" if continuing else "wb") as f:
+                with tmp.open("ab" if continuing else "wb") as f:
                     for chunk in resp.iter_content(chunk_size=65536):
                         if not chunk:
                             continue
@@ -751,8 +778,9 @@ def fetch_catalog_index(force=False, timeout=60, on_log=None):
         data, last_err = None, None
         for host in (1, 2, 3):  # s-file-1/2/3 互为镜像
             try:
-                resp = requests.get(CATALOG_URL.format(n=host, p=p),
-                                    headers={"User-Agent": UA}, timeout=timeout)
+                resp = requests.get(
+                    validate_public_http_url(CATALOG_URL.format(n=host, p=p)),
+                    headers={"User-Agent": UA}, timeout=timeout)
                 if resp.status_code == 200:
                     data = resp.json()
                     break

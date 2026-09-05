@@ -23,6 +23,8 @@ token.txt
 
 # 工具内部目录（agent 工作日志，与项目本身无关）
 .workbuddy/
+.mimosa/
+.zcode/
 
 # 系统文件
 Thumbs.db

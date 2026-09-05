@@ -10,9 +10,8 @@ PyInstaller 的 icon= 可直接使用。
 保证辨识度；大尺寸下字形完整可读。
 """
 import struct
-import os
+from pathlib import Path
 
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "app.ico")
 
 # 调色板（印章风）
 SEAL = (176, 42, 32)       # 朱砂红印面
@@ -155,9 +154,13 @@ def main():
     for s, bmp in images:
         ico += bmp
 
-    with open(OUT, "wb") as f:
-        f.write(ico)
-    print(f"图标已生成: {OUT} ({os.path.getsize(OUT)} bytes, {len(sizes)} 尺寸)")
+    # 图标固定写到脚本所在目录：文件名为常量，目录规范化后做包含校验
+    base = Path(__file__).resolve().parent
+    target = (base / "app.ico").resolve()
+    if not target.is_relative_to(base):
+        raise SystemExit("图标输出路径越界")
+    target.write_bytes(ico)
+    print(f"图标已生成: {target} ({target.stat().st_size} bytes, {len(sizes)} 尺寸)")
 
 
 if __name__ == "__main__":

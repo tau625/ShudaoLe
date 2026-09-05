@@ -39,6 +39,7 @@ import subprocess
 import sys
 import time
 import urllib.parse
+from pathlib import Path
 
 # ============ 常量 ============
 DEFAULT_TRIGGER_CID = "bdc00134-465d-454b-a541-dcd0cec4d86e"
@@ -398,11 +399,16 @@ def run_token_fetch(trigger_content=DEFAULT_TRIGGER_CID, token_file=None,
 
     if captured:
         if token_file:
-            try:
-                with open(token_file, "w", encoding="utf-8") as f:
-                    f.write(captured)
-            except Exception:
-                pass
+            # 令牌写入路径防护：只取参数中的纯文件名拼回规范化后的目录，
+            # 剥掉任何目录成分（含 ..），落盘前再校验一次包含关系
+            raw = Path(token_file)
+            base = raw.resolve().parent
+            target = base / raw.name
+            if target.resolve().is_relative_to(base):
+                try:
+                    target.write_text(captured, encoding="utf-8")
+                except Exception:
+                    pass
         p = {"ok": True, "token": captured,
              "source": "自动捕获于 " + time.strftime("%H:%M:%S")}
         emit(p)
