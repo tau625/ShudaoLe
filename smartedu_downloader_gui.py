@@ -216,6 +216,14 @@ def _extract_path(msg):
     return ""
 
 
+def _is_within(path, base):
+    """路径包含校验：path 规范化后必须位于 base 目录内（含相等）"""
+    try:
+        return Path(path).resolve().is_relative_to(Path(base).resolve())
+    except (OSError, ValueError):
+        return False
+
+
 def pick_folder(start=""):
     """弹出系统资源管理器文件夹选择对话框。
 
@@ -237,7 +245,8 @@ def pick_folder(start=""):
         "$d = New-Object System.Windows.Forms.FolderBrowserDialog;"
         "$d.Description = '请选择教材下载保存目录';"
         "$d.ShowNewFolderButton = $true;"
-        + (f"$d.SelectedPath = '{start}';" if start else "")
+        # start 来自界面回传，必须转义单引号（''），否则可拼进任意 PowerShell 代码
+        + (f"$d.SelectedPath = '{start.replace(chr(39), chr(39) * 2)}';" if start else "")
         + "if ($d.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) "
         + "{ [Console]::Out.Write($d.SelectedPath) }"
     )
@@ -448,6 +457,29 @@ def run_task(payload):
 class Handler(BaseHTTPRequestHandler):
     server_version = "ShudaoLe/1.0"
 
+    def _local_origin(self):
+        """本服务只接受明确来自本机的请求。
+
+        Host 校验：DNS 重绑定攻击会把攻击者域名解析到 127.0.0.1，此时浏览器
+        发出的 Host 是攻击者域名而非本机地址，据此拦截，防止令牌/任务数据
+        被第三方网页读取。
+        Origin 校验（仅 POST）：浏览器发起的跨站 POST 一定带 Origin 头；
+        同源页面与 curl 等本机工具通常不带。出现非本机 Origin 即判定为
+        跨站伪造请求（CSRF），拒绝执行改状态操作。
+        """
+        port = self.server.server_address[1]
+        local_hosts = {f"127.0.0.1:{port}", f"localhost:{port}", f"[::1]:{port}"}
+        host = (self.headers.get("Host") or "").strip().lower()
+        if host not in local_hosts:
+            return False
+        if self.command == "POST":
+            origin = (self.headers.get("Origin") or "").strip().lower()
+            if origin and origin.rstrip("/") not in {
+                    f"http://127.0.0.1:{port}", f"http://localhost:{port}",
+                    f"http://[::1]:{port}"}:
+                return False
+        return True
+
     def _send(self, body, content_type, code=200):
         data = body.encode("utf-8")
         self.send_response(code)
@@ -462,6 +494,9 @@ class Handler(BaseHTTPRequestHandler):
                    "application/json; charset=utf-8", code)
 
     def do_GET(self):
+        if not self._local_origin():
+            self._send_json({"error": "拒绝非本机来源的请求"}, 403)
+            return
         path = urlsplit(self.path).path
         if path in ("/", "/index.html"):
             try:
@@ -539,6 +574,9 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json({"error": "not found"}, 404)
 
     def do_POST(self):
+        if not self._local_origin():
+            self._send_json({"error": "拒绝非本机来源的请求"}, 403)
+            return
         path = urlsplit(self.path).path
         if path == "/api/start":
             with LOCK:
@@ -613,6 +651,13 @@ class Handler(BaseHTTPRequestHandler):
                 mode = "file"
             if not target:
                 self._send_json({"error": "缺少路径"}, 400)
+                return
+            # 打开动作只允许作用于当前任务的下载目录内，
+            # 防止被诱导的请求用 os.startfile 打开/执行任意路径
+            with LOCK:
+                out_dir = STATE.get("out_dir", "")
+            if not out_dir or not _is_within(target, out_dir):
+                self._send_json({"error": "只允许打开下载目录内的文件"}, 403)
                 return
             ok, msg = open_with_default(target, mode)
             if not ok:
