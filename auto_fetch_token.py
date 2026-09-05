@@ -39,6 +39,7 @@ import subprocess
 import sys
 import time
 import urllib.parse
+import shutil
 from pathlib import Path
 
 # ============ 常量 ============
@@ -64,6 +65,21 @@ def _edge_candidates():
     env = os.environ.get("AUTO_EDGE", "").strip()
     if env:
         yield env
+    if sys.platform == "darwin":
+        yield "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge"
+        yield "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+        return
+    if os.name != "nt":
+        # Linux：包管理器（PATH 中）与 snap 的常见安装位置
+        for name in ("microsoft-edge", "microsoft-edge-stable",
+                     "google-chrome", "google-chrome-stable",
+                     "chromium", "chromium-browser"):
+            p = shutil.which(name)
+            if p:
+                yield p
+        yield "/snap/bin/chromium"
+        yield "/snap/bin/microsoft-edge"
+        return
     yield r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
     yield r"C:\Program Files\Microsoft\Edge\Application\msedge.exe"
     yield r"C:\Program Files\Google\Chrome\Application\chrome.exe"

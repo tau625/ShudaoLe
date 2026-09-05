@@ -20,6 +20,7 @@ import ctypes
 import json
 import os
 import re
+import shutil
 import socket
 import subprocess
 import sys
@@ -225,14 +226,24 @@ def _is_within(path, base):
 
 
 def pick_folder(start=""):
-    """弹出系统资源管理器文件夹选择对话框。
+    """弹出系统目录选择对话框。
 
     返回 (path, status)：
       - (path, "ok")        用户选中了文件夹，path 为绝对路径
       - ("", "cancelled")   用户点了取消 / 关闭对话框
-      - ("", "error")       对话框或管道出错（如超时、非 Windows）
-    注：仅 Windows 可用；其它平台返回 ("", "error")。
+      - ("", "error")       对话框或管道出错（如超时、未装 zenity）
+    按平台分发：Windows 用 PowerShell 弹 FolderBrowserDialog，
+    macOS 用 osascript 调 Finder，Linux 优先 zenity。都不可用时
+    返回 ("", "error")，界面仍可手动输入保存路径。
     """
+    if os.name == "nt":
+        return _pick_folder_windows(start)
+    if sys.platform == "darwin":
+        return _pick_folder_macos()
+    return _pick_folder_linux()
+
+
+def _pick_folder_windows(start=""):
     if os.name != "nt":
         return "", "error"
     # 关键：PowerShell 子进程默认用系统代码页(如 GBK)写 stdout，中文路径会被
@@ -276,6 +287,44 @@ def pick_folder(start=""):
         return "", "error"
 
 
+def _pick_folder_macos():
+    """macOS：osascript 调 Finder 的 choose folder（用户取消返回 -128）"""
+    script = 'POSIX path of (choose folder with prompt "请选择教材下载保存目录")'
+    try:
+        r = subprocess.run(["osascript", "-e", script],
+                           capture_output=True, text=True, timeout=300)
+        out = (r.stdout or "").strip()
+        if r.returncode == 0 and out and os.path.isdir(out):
+            return out, "ok"
+        if "-128" in (r.stderr or ""):
+            return "", "cancelled"
+        add_log(f"目录选择对话框进程异常退出(code={r.returncode})")
+        return "", "error"
+    except (subprocess.TimeoutExpired, OSError) as e:
+        add_log(f"目录选择对话框异常: {e}")
+        return "", "error"
+
+
+def _pick_folder_linux():
+    """Linux：优先 zenity；未安装返回 error（界面仍可手动输入路径）"""
+    if not shutil.which("zenity"):
+        return "", "error"
+    try:
+        r = subprocess.run(
+            ["zenity", "--file-selection", "--directory",
+             "--title", "请选择教材下载保存目录"],
+            capture_output=True, text=True, timeout=300)
+        out = (r.stdout or "").strip()
+        if r.returncode == 0 and out and os.path.isdir(out):
+            return out, "ok"
+        if r.returncode == 1:
+            return "", "cancelled"
+        return "", "error"
+    except (subprocess.TimeoutExpired, OSError) as e:
+        add_log(f"目录选择对话框异常: {e}")
+        return "", "error"
+
+
 def open_with_default(path, mode="file"):
     """用系统方式打开文件/目录。mode:
       - "file":   用系统默认程序打开文件（目录则打开该目录）
@@ -297,6 +346,13 @@ def open_with_default(path, mode="file"):
                 subprocess.Popen(["explorer", os.path.dirname(p)])
             else:
                 os.startfile(p)  # 文件用默认程序打开；目录用资源管理器打开
+        elif sys.platform == "darwin":
+            if mode == "reveal":
+                subprocess.Popen(["open", "-R", p])  # Finder 中定位该项
+            elif mode == "dir" and not is_dir:
+                subprocess.Popen(["open", os.path.dirname(p)])
+            else:
+                subprocess.Popen(["open", p])
         else:
             subprocess.Popen(["xdg-open", p], stdout=subprocess.DEVNULL,
                              stderr=subprocess.DEVNULL)

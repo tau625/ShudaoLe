@@ -19,6 +19,10 @@
 
 import sys
 
+# version 文件与 icon 仅在 Windows 上生效；macOS/Linux 构建时由 CI 传 None，
+# 保证同一份 spec 三平台都能跑
+IS_WIN = sys.platform.startswith("win")
+
 # 收集版本信息文件（打包时由 build.bat 先生成 version_info.txt，这里引用）
 _vi = None
 _vi_path = 'version_info.txt'
@@ -91,8 +95,8 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='app.ico',              # 程序图标
-    version=_vi_path if _vi else None,  # 版本信息（Windows 文件属性）——version 参数是文件路径
+    icon='app.ico' if IS_WIN else None,              # 程序图标
+    version=_vi_path if (_vi and IS_WIN) else None,  # 版本信息（Windows 文件属性）——version 参数是文件路径
 )
 
 coll = COLLECT(

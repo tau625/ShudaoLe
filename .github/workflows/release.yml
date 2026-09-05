@@ -1,0 +1,64 @@
+# 三平台自动打包：推送 v* 标签时，在 Windows / Linux / macOS 上分别用
+# PyInstaller 构建，并把产物自动挂到对应 Release。
+# 注意：Linux 包在 ubuntu-22.04 上构建（glibc >= 2.35）；macOS 包未签名，
+# 用户首次运行需绕过 Gatekeeper（右键打开或 xattr -cr）。
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, platform: windows }
+          - { os: ubuntu-22.04, platform: linux }
+          - { os: macos-latest, platform: macos }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install requests pyinstaller
+
+      - name: Build (PyInstaller)
+        run: python -m PyInstaller build.spec --noconfirm
+
+      - name: Package (windows)
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          $version = $env:GITHUB_REF_NAME -replace '^v', ''
+          Compress-Archive -Path 'dist\书到了\*' -DestinationPath "ShudaoLe-${version}-windows-x64.zip" -Force
+
+      - name: Package (linux)
+        if: matrix.platform == 'linux'
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          tar -C dist -czf "ShudaoLe-${version}-linux-x64.tar.gz" "书到了"
+
+      - name: Package (macos)
+        if: matrix.platform == 'macos'
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          cd dist && zip -qry "ShudaoLe-${version}-macos.zip" "书到了"
+
+      - name: Attach to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ShudaoLe-*
