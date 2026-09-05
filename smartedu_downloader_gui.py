@@ -298,8 +298,7 @@ def open_with_default(path, mode="file"):
             else:
                 os.startfile(p)  # 文件用默认程序打开；目录用资源管理器打开
         else:
-            opener = ["xdg-open"] if is_dir else ["xdg-open", p]
-            subprocess.Popen(opener, stdout=subprocess.DEVNULL,
+            subprocess.Popen(["xdg-open", p], stdout=subprocess.DEVNULL,
                              stderr=subprocess.DEVNULL)
         return True, ""
     except Exception as e:
