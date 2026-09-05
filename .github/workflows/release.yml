@@ -56,7 +56,8 @@ jobs:
         shell: bash
         run: |
           version="${GITHUB_REF_NAME#v}"
-          cd dist && zip -qry "ShudaoLe-${version}-macos.zip" "书到了"
+          # zip 必须落在仓库根目录，供上传步骤的 ShudaoLe-* 通配匹配
+          cd dist && zip -qry "../ShudaoLe-${version}-macos.zip" "书到了"
 
       - name: Attach to release
         uses: softprops/action-gh-release@v2
