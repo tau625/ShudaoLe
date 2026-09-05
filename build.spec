@@ -38,6 +38,8 @@ a = Analysis(
         ('smartedu_webui.html', '.'),
         # 版本号单一来源：界面显示与 exe 文件属性都从它解析，发版只改这一处
         ('version_info.txt', '.'),
+        # PolyForm 许可的 Notices 条款要求分发时附带许可声明
+        ('LICENSE', '.'),
     ],
     hiddenimports=[
         'requests',
