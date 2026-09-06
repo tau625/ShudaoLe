@@ -55,9 +55,9 @@ jobs:
         if: matrix.platform == 'macos'
         shell: bash
         run: |
-          version="${GITHUB_REF_NAME#v}"
-          # zip 必须落在仓库根目录，供上传步骤的 ShudaoLe-* 通配匹配
-          cd dist && zip -qry "../ShudaoLe-${version}-macos.zip" "书到了"
+          # 用 Python zipfile 打包：非 ASCII 文件名会正确写入 UTF-8 标志
+          # （Info-ZIP 默认不设标志，Windows 侧解压会得到乱码目录名）
+          python -c "import shutil; print(shutil.make_archive('ShudaoLe-${GITHUB_REF_NAME#v}-macos', 'zip', 'dist', '书到了'))"
 
       - name: Attach to release
         uses: softprops/action-gh-release@v2
