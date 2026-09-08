@@ -29,3 +29,9 @@ token.txt
 # 系统文件
 Thumbs.db
 .DS_Store
+
+# 宣传视频等大文件：不入库，避免撑爆 .git 历史
+# 视频统一作为 Release 附件托管，README 用直链引用
+video/
+*.mp4
+*.mov

@@ -6,6 +6,14 @@
 
 从「国家中小学智慧教育平台」（https://basic.smartedu.cn ）下载教材 PDF 的命令行 + 网页界面工具。
 
+## 功能演示
+
+<video src="https://github.com/tau625/ShudaoLe/releases/download/v1.2.0/shudaole-demo-1.5x.mp4" controls width="100%"></video>
+
+> 演示视频 1 分 56 秒（1.5 倍速，原速 2 分 54 秒）：获取令牌 → 级联筛选 → 批量下载 → 打开文件。
+> 视频托管在 Release 附件，未占用仓库体积；看不到播放器时点这里下载：
+> https://github.com/tau625/ShudaoLe/releases/download/v1.2.0/shudaole-demo-1.5x.mp4
+
 ## 下载与安装
 
 | 平台 | 方式 |
