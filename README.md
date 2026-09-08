@@ -11,7 +11,7 @@
 https://github.com/user-attachments/assets/2e59032c-0cc7-4e00-802e-52b620c795b5
 
 > 演示内容：获取令牌 → 级联筛选 → 批量下载 → 打开文件（1 分 56 秒，1.5 倍速）。
-> 更高画质/原速版见 [v1.2.0 Release 附件](https://github.com/tau625/ShudaoLe/releases/download/v1.2.0/shudaole-demo-1.5x.mp4)。
+> 更高画质见 [v1.2.0 Release 附件](https://github.com/tau625/ShudaoLe/releases/download/v1.2.0/shudaole-demo-1.5x.mp4)。
 
 ## 下载与安装
 
