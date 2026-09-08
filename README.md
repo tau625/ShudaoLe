@@ -8,13 +8,10 @@
 
 ## 功能演示
 
-[![书到了功能演示 · 1 分 56 秒](docs/demo-poster.jpg)](https://github.com/tau625/ShudaoLe/releases/download/v1.2.0/shudaole-demo-1.5x.mp4)
+https://github.com/user-attachments/assets/2e59032c-0cc7-4e00-802e-52b620c795b5
 
-> 点击封面图在线播放，或在浏览器打开直链：
-> https://github.com/tau625/ShudaoLe/releases/download/v1.2.0/shudaole-demo-1.5x.mp4
->
-> 演示内容：获取令牌 → 级联筛选 → 批量下载 → 打开文件。
-> 视频托管在 Release 附件，未占用仓库体积。
+> 演示内容：获取令牌 → 级联筛选 → 批量下载 → 打开文件（1 分 56 秒，1.5 倍速）。
+> 更高画质/原速版见 [v1.2.0 Release 附件](https://github.com/tau625/ShudaoLe/releases/download/v1.2.0/shudaole-demo-1.5x.mp4)。
 
 ## 下载与安装
 
@@ -39,8 +36,6 @@ smartedu-教材下载器/
 ├── auto_fetch_token.py           # 一键获取登录令牌（纯 Python，进程内整合，零依赖）
 ├── make_icon.py                  # 生成 app.ico 图标（纯标准库，无需 Pillow）
 ├── app.ico                       # 程序图标（由 make_icon.py 生成）
-├── docs/
-│   └── demo-poster.jpg           # README 功能演示封面图
 ├── version_info.txt              # Windows 版本资源（打包时写入 exe 文件属性）
 ├── build.spec                    # PyInstaller 打包配置（onedir 模式）
 ├── build.bat                     # 一键打包入口（双击即可重新出 exe + zip）
