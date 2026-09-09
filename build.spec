@@ -14,7 +14,7 @@
 #   - 令牌抓取已整合进 GUI 进程内（shudaole.token 模块），随 exe 自动收集，
 #     对方机器无需安装 Python，真正零依赖。
 #   - 隐藏导入 requests/urllib3，确保 requests 被完整收集
-#   - icon：app.ico（由 make_icon.py 生成）
+#   - icon：app.ico（朱砂印「書」，由 AI 生成图 png_to_ico 转制）
 #   - version 文件：加入版本/版权信息，进一步降低杀软误报、提升信任度
 
 import sys
