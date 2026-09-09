@@ -335,6 +335,8 @@ Semantic versioning (`major.minor.patch`), judged by **user-visible impact**:
 
 ## Disclaimer
 
+> For upcoming improvements, see the [Roadmap](ROADMAP_EN.md) (P0 correctness fixes → engineering foundation → concurrent/resumable downloads, catalog extension, update checks).
+
 This tool is for personal study, research, and lesson preparation only. Textbook copyright
 belongs to the National Smart Education Platform and the respective publishers. Do not use
 it for commercial purposes or redistribution.
