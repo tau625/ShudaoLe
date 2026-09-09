@@ -237,7 +237,7 @@ def pick_folder(start=""):
       - (path, "ok")        用户选中了文件夹，path 为绝对路径
       - ("", "cancelled")   用户点了取消 / 关闭对话框
       - ("", "error")       对话框或管道出错（如超时、未装 zenity）
-    按平台分发：Windows 用 PowerShell 弹 FolderBrowserDialog，
+    按平台分发：Windows 用进程内 COM IFileDialog（资源管理器同款现代对话框），
     macOS 用 osascript 调 Finder，Linux 优先 zenity。都不可用时
     返回 ("", "error")，界面仍可手动输入保存路径。
     """
@@ -249,6 +249,135 @@ def pick_folder(start=""):
 
 
 def _pick_folder_windows(start=""):
+    """Windows：进程内 COM IFileDialog。
+
+    旧方案起 PowerShell 子进程弹 WinForms FolderBrowserDialog，有两个
+    用户可感知的毛病：①子进程带控制台黑窗闪现；②子进程未声明 DPI
+    感知，高缩放屏上对话框被系统拉伸发糊，且那是老式树状对话框。
+    现改为进程内 COM 调用（无子进程、现代对话框、进程级 DPI 感知），
+    COM 路径异常时回退旧 PowerShell 方案兜底。
+    """
+    try:
+        return _pick_folder_com(start)
+    except Exception as e:  # COM 初始化/调用任何环节失败都不影响功能可用
+        add_log(f"目录选择 COM 对话框异常，回退 PowerShell 方案: {e}")
+        return _pick_folder_windows_ps(start)
+
+
+# 进程级 DPI 感知只需设置一次
+_dpi_aware_done = False
+
+
+def _ensure_windows_dpi_aware():
+    """声明 Per-Monitor V2 DPI 感知：对话框按屏幕真实缩放渲染，不再发糊。
+
+    必须在创建任何窗口前调用；进程内唯一的窗口就是本对话框与消息框，
+    设置只影响清晰度，无副作用。逐级降级到旧 API，全部失败也不致命。
+    """
+    global _dpi_aware_done
+    if _dpi_aware_done or os.name != "nt":
+        return
+    _dpi_aware_done = True
+    try:
+        u32 = ctypes.windll.user32
+        if hasattr(u32, "SetProcessDpiAwarenessContext"):
+            # DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2 = (HANDLE)-4
+            if u32.SetProcessDpiAwarenessContext(ctypes.c_void_p(-4)):
+                return
+        try:
+            ctypes.windll.shcore.SetProcessDpiAwareness(2)  # PER_MONITOR_DPI_AWARE
+        except Exception:
+            u32.SetProcessDPIAware()
+    except Exception:
+        pass
+
+
+def _pick_folder_com(start=""):
+    """ctypes 直接调 COM IFileDialog（不依赖 pywin32/comtypes）。"""
+    from ctypes import POINTER, byref, c_long, c_ulong, c_void_p, c_wchar_p
+
+    _ensure_windows_dpi_aware()
+    ole32 = ctypes.oledll.ole32
+    shell32 = ctypes.windll.shell32
+
+    class GUID(ctypes.Structure):
+        _fields_ = [("Data1", c_ulong), ("Data2", ctypes.c_ushort),
+                    ("Data3", ctypes.c_ushort), ("Data4", ctypes.c_ubyte * 8)]
+
+    def make_guid(s):
+        g = GUID()
+        ole32.CLSIDFromString("{%s}" % s, byref(g))
+        return g
+
+    CLSID_FileOpenDialog = make_guid("DC1C5A9C-E88A-4DDE-A5A1-60F82A20AEF7")
+    IID_IFileDialog = make_guid("42F85136-DB7E-439C-85F1-E4075D135FC8")
+    IID_IShellItem = make_guid("43826D1E-E718-42EE-BC55-A1E261C37BFE")
+
+    def vfunc(obj, index, restype, *argtypes):
+        """取 COM 接口 obj vtable 第 index 项，包装成可调用函数（this 为首参）。"""
+        vtbl = ctypes.cast(obj, POINTER(c_void_p))[0]
+        fp = ctypes.cast(vtbl, POINTER(c_void_p))[index]
+        return ctypes.WINFUNCTYPE(restype, c_void_p, *argtypes)(fp)
+
+    hr_cancelled = 0x800704C7  # HRESULT_FROM_WIN32(ERROR_CANCELLED)
+
+    ole32.CoInitializeEx(None, 0x2)  # COINIT_APARTMENTTHREADED
+    dlg = c_void_p()
+    ole32.CoCreateInstance(byref(CLSID_FileOpenDialog), None, 1,  # CLSCTX_INPROC_SERVER
+                           byref(IID_IFileDialog), byref(dlg))
+    try:
+        get_options = vfunc(dlg, 10, c_long, POINTER(c_ulong))
+        set_options = vfunc(dlg, 9, c_long, c_ulong)
+        set_title = vfunc(dlg, 17, c_long, c_wchar_p)
+        set_folder = vfunc(dlg, 12, c_long, c_void_p)
+        show = vfunc(dlg, 3, c_long, c_void_p)
+        get_result = vfunc(dlg, 20, c_long, POINTER(c_void_p))
+        release = vfunc(dlg, 2, c_ulong)
+
+        opts = c_ulong()
+        get_options(dlg, byref(opts))
+        set_options(dlg, opts.value | 0x20 | 0x40)  # FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM
+        set_title(dlg, "请选择教材下载保存目录")
+        if start:
+            # 初始定位到上次选择的目录；路径失效则静默跳过，不影响弹出
+            try:
+                item0 = c_void_p()
+                shell32.SHCreateItemFromParsingName(str(start), None,
+                                                    byref(IID_IShellItem), byref(item0))
+                if item0:
+                    set_folder(dlg, item0)
+                    vfunc(item0, 2, c_ulong)(item0)
+            except Exception:
+                pass
+
+        hr = show(dlg, None)
+        if hr == hr_cancelled or (hr & 0xFFFF) == 0x04C7:
+            return "", "cancelled"
+        if hr != 0:
+            raise OSError(f"IFileDialog.Show hr=0x{hr & 0xFFFFFFFF:08X}")
+
+        item = c_void_p()
+        get_result(dlg, byref(item))
+        try:
+            pw = c_void_p()
+            vfunc(item, 5, c_long, c_ulong, POINTER(c_void_p))(item, 0x80058000, byref(pw))
+            try:
+                path = ctypes.wstring_at(pw)
+            finally:
+                ole32.CoTaskMemFree(pw)
+        finally:
+            vfunc(item, 2, c_ulong)(item)
+    finally:
+        release(dlg)
+        ole32.CoUninitialize()
+
+    if path and os.path.isdir(path):
+        return path, "ok"
+    add_log(f"目录选择返回了无效路径: {path}")
+    return "", "error"
+
+
+def _pick_folder_windows_ps(start=""):
     if os.name != "nt":
         return "", "error"
     # 关键：PowerShell 子进程默认用系统代码页(如 GBK)写 stdout，中文路径会被
