@@ -123,10 +123,12 @@ jobs:
           # PyInstaller BUNDLE 已产出原生 书到了.app（dist 下）；
           # 用 hdiutil 打成 .dmg 分发——用户打开后拖进 Applications 即完成安装
           set -e
-          test -d "dist/书到了.app" || { echo "未找到 书到了.app"; ls dist; exit 1; }
+          app="$(ls -d dist/*.app 2>/dev/null | head -1)"
+          if [ -z "$app" ]; then echo "未找到 .app 产物"; ls dist; exit 1; fi
+          echo "找到应用包: $app"
           version="${GITHUB_REF_NAME#v}"
           hdiutil create -volname "ShudaoLe ${version}" \
-            -srcfolder "dist/书到了.app" -format UDZO \
+            -srcfolder "$app" -format UDZO \
             -ov "ShudaoLe-${version}-macos.dmg"
 
       - name: Attach to release

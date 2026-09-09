@@ -113,10 +113,12 @@ coll = COLLECT(
 
 # macOS：把 COLLECT 产物包成原生 .app（Finder 双击启动、Dock 图标、无终端窗口），
 # CI 再用 hdiutil 打成 .dmg 分发。仅在 macOS 构建时生效。
+# 注意：spec API 不像 CLI 那样自动补 .app 后缀，name 必须显式带 .app，
+# 否则 bundle 会以裸名「书到了」生成，Finder 不认（v1.3.5-test 实测踩坑）。
 if IS_MAC:
     bundle = BUNDLE(
         coll,
-        name='书到了',
+        name='书到了.app',
         icon='assets/app.icns',
         bundle_identifier='cn.tau625.shudaole',
     )
