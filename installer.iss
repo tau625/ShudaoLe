@@ -38,7 +38,9 @@ LicenseFile=LICENSE
 InfoBeforeFile=installer-notice.txt
 
 [Languages]
-Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
+; runner 自带的 Inno Setup 不含简体中文（非官方语言），随仓库捆绑
+; （取自 jrsoftware/issrc is-6_7_1 tag，UTF-8 版式，需 Inno 6.5+）
+Name: "chinesesimplified"; MessagesFile: "ChineseSimplified.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
