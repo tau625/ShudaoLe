@@ -19,9 +19,9 @@ https://github.com/user-attachments/assets/2e59032c-0cc7-4e00-802e-52b620c795b5
 
 | Platform | How |
 |---|---|
-| Windows | Download `ShudaoLe-vX.Y.Z-windows-x64.zip` from [Releases](https://github.com/tau625/ShudaoLe/releases/latest), extract, double-click `书到了.exe` |
-| macOS (Apple Silicon) | Download `ShudaoLe-vX.Y.Z-macos.zip`, extract, run `xattr -cr 书到了` in a terminal (removes the quarantine attribute), then `./书到了` |
-| Linux (x64, glibc ≥ 2.35) | Download `ShudaoLe-vX.Y.Z-linux-x64.tar.gz`, extract, `chmod +x 书到了 && ./书到了` |
+| Windows | Download `ShudaoLe-X.Y.Z-windows-x64.zip` from [Releases](https://github.com/tau625/ShudaoLe/releases/latest), extract, double-click `书到了.exe` |
+| macOS (Apple Silicon) | Download `ShudaoLe-X.Y.Z-macos.zip`, extract, run `xattr -cr 书到了` in a terminal (removes the quarantine attribute), then `./书到了` |
+| Linux (x64, glibc ≥ 2.35) | Download `ShudaoLe-X.Y.Z-linux-x64.tar.gz`, extract, `chmod +x 书到了 && ./书到了` |
 | Any platform (run from source) | Clone this repo → `pip install -r requirements.txt` → `python smartedu_downloader_gui.py` (web UI) or `python smartedu_downloader.py` (CLI) |
 
 > Notes for non-Windows platforms: "one-click token fetch" works on all three platforms (it auto-detects the system Edge/Chrome);

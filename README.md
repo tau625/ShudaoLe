@@ -19,9 +19,9 @@ https://github.com/user-attachments/assets/2e59032c-0cc7-4e00-802e-52b620c795b5
 
 | 平台 | 方式 |
 |---|---|
-| Windows | 从 [Releases](https://github.com/tau625/ShudaoLe/releases/latest) 下载 `ShudaoLe-vX.Y.Z-windows-x64.zip`，解压后双击 `书到了.exe` |
-| macOS（Apple Silicon） | 下载 `ShudaoLe-vX.Y.Z-macos.zip`，解压后在终端执行 `xattr -cr 书到了`（去除隔离属性）再 `./书到了` |
-| Linux（x64，glibc ≥ 2.35） | 下载 `ShudaoLe-vX.Y.Z-linux-x64.tar.gz`，解压后 `chmod +x 书到了 && ./书到了` |
+| Windows | 从 [Releases](https://github.com/tau625/ShudaoLe/releases/latest) 下载 `ShudaoLe-X.Y.Z-windows-x64.zip`，解压后双击 `书到了.exe` |
+| macOS（Apple Silicon） | 下载 `ShudaoLe-X.Y.Z-macos.zip`，解压后在终端执行 `xattr -cr 书到了`（去除隔离属性）再 `./书到了` |
+| Linux（x64，glibc ≥ 2.35） | 下载 `ShudaoLe-X.Y.Z-linux-x64.tar.gz`，解压后 `chmod +x 书到了 && ./书到了` |
 | 任意平台（源码运行） | 克隆本仓库 → `pip install -r requirements.txt` → `python smartedu_downloader_gui.py`（网页界面）或 `python smartedu_downloader.py`（命令行） |
 
 > 非 Windows 平台说明：「一键获取令牌」已支持三平台（自动探测系统 Edge/Chrome）；
