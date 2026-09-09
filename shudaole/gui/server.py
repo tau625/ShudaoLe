@@ -915,7 +915,24 @@ def _notify(title, msg):
     print(f"{title}: {msg}")
 
 
+def _acquire_app_mutex():
+    """Windows：创建命名互斥量供 Inno Setup 安装器检测「程序正在运行」。
+
+    返回内核句柄（进程存活期间保持有效，退出时由系统释放）；
+    非 Windows 或创建失败返回 None（安装器届时回退到文件占用检测）。
+    """
+    if sys.platform != "win32":
+        return None
+    try:
+        import ctypes
+        handle = ctypes.windll.kernel32.CreateMutexW(None, False, "ShudaoLeAppMutex")
+        return handle or None
+    except Exception:
+        return None
+
+
 def main():
+    _app_mutex = _acquire_app_mutex()  # noqa: F841 保活到进程退出
     attach_callback(add_log)  # P1-3：shudaole.* 日志同源进界面缓冲
     from .. import pubs as _pubs; from .. import catalog as _catalog_mod
     _pubs.apply_user_pubs(_catalog_mod)  # P2-3：用户级出版社配置合并

@@ -15,6 +15,9 @@
 
 [Setup]
 AppId={{8C1C4E2A-95D3-4B7A-9E0F-SHUDAOLE01}
+; 程序启动时创建同名互斥量（server.py _acquire_app_mutex），
+; 安装/升级时检测到则弹出「请先关闭书到了」的友好提示，而非文件占用报错
+AppMutex=ShudaoLeAppMutex
 AppName={#AppName}
 AppVersion={#Version}
 AppVerName={#AppName} {#Version}（{#AppNameEn}）
