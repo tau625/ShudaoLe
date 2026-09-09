@@ -67,14 +67,14 @@ def fetch_catalog_index(force=False, timeout=60, on_log=None):
                 last_err = type(e).__name__
         if data is None:
             raise DownloadError(f"目录分片 part_{p} 获取失败（{last_err}），请稍后重试")
-        for e in data:
-            cid = e.get("id")
-            title = (e.get("title") or "").strip()
+        for row in data:
+            cid = row.get("id")
+            title = (row.get("title") or "").strip()
             if not cid or cid in seen or not title:
                 continue
             seen.add(cid)
             entry = {"id": cid, "title": title}
-            for t in e.get("tag_list") or []:
+            for t in row.get("tag_list") or []:
                 dim = TAG_DIM_MAP.get(t.get("tag_dimension_id"))
                 if dim and not entry.get(dim):
                     entry[dim] = (t.get("tag_name") or "").strip()

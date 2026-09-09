@@ -219,11 +219,20 @@ def build_filename(meta, title, flat=False):
 
 
 
+# Windows 保留设备名（CON/NUL/COM1...）：不带扩展名也占用，作文件名必失败。
+# 判定对象是首个点之前的主名（"CON.pdf" 同样保留）。
+_RESERVED_DEVICE_RE = re.compile(
+    r"^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$", re.IGNORECASE)
+
+
 # ---------- 文件名与本地路径 ----------
 def sanitize_filename(name):
     """清理 Windows 非法字符、首尾空格与点，限制长度"""
     name = ILLEGAL_CHARS_RE.sub("_", (name or "").strip()).strip(" .")
-    return (name[:120] or "未命名教材")
+    name = name[:120] or "未命名教材"
+    if _RESERVED_DEVICE_RE.match(name.split(".", 1)[0]):
+        name = "_" + name
+    return name
 
 
 

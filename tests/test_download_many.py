@@ -11,8 +11,12 @@ from shudaole.download import AuthContext, download_many
 
 @pytest.fixture(autouse=True)
 def _skip_dns(monkeypatch):
-    """mock 环境无真实 DNS：SSRF 校验放行为公网测试域名。"""
-    monkeypatch.setattr(dl, "validate_public_http_url", lambda url: url)
+    """mock 环境无真实 DNS：SSRF 校验放行为公网测试域名。
+
+    P1-4 后 download.py 改用 net.get_with_redirect_check（内部调用
+    net 模块的全局 validate），因此补丁要打在 shudaole.net 上。"""
+    import shudaole.net as net_mod
+    monkeypatch.setattr(net_mod, "validate_public_http_url", lambda url: url)
 
 DETAIL_TMPL = "https://s-file-1.ykt.cbern.com.cn/zxx/ndrv2/resources/tch_material/details/{cid}.json"
 

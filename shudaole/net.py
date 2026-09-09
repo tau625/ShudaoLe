@@ -4,7 +4,7 @@
 import ipaddress
 import socket
 import sys
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 from .errors import DownloadError
 
@@ -18,7 +18,7 @@ except ImportError:
 try:
     from urllib3.util.retry import Retry
 except ImportError:  # 极旧环境兜底：不挂连接级重试
-    Retry = None
+    Retry = None  # type: ignore[assignment,misc]
 
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36")
@@ -67,5 +67,35 @@ def validate_public_http_url(url):
         if not ip.is_global:
             raise DownloadError(f"拒绝请求解析到非公网地址的主机: {host} -> {ip}")
     return url
+
+
+MAX_REDIRECT_HOPS = 5
+
+
+def get_with_redirect_check(session, url, stream=False, timeout=30, headers=None):
+    """逐跳复检 SSRF 闸门的 GET（替代 requests 自动跟随重定向）。
+
+    requests 的自动重定向不会对每一跳重新做 validate_public_http_url——
+    而下载地址来自远端 JSON（ti_storages），服务器若 302 到内网地址，
+    自动跟随就成了 SSRF 旁路。这里 allow_redirects=False 手动跟跳，
+    每一跳（含相对 Location 合成后的绝对地址）都重新过闸，超跳数即中止。
+    """
+    current = url
+    resp = None
+    for _ in range(MAX_REDIRECT_HOPS):
+        validate_public_http_url(current)
+        resp = session.get(current, stream=stream, timeout=timeout,
+                           headers=headers, allow_redirects=False)
+        if resp.is_redirect or resp.is_permanent_redirect:
+            loc = (resp.headers.get("Location") or "").strip()
+            resp.close()
+            if not loc:
+                return resp      # 无 Location 的异常 3xx，交由上层按状态码处理
+            current = urljoin(current, loc)
+            continue
+        return resp
+    if resp is not None:
+        resp.close()
+    raise DownloadError(f"重定向超过 {MAX_REDIRECT_HOPS} 跳，已中止（疑似循环重定向）")
 
 

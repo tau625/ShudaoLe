@@ -2,7 +2,9 @@
 """下载内核：详情获取、候选地址提取、重试下载、令牌管理与单条流程。"""
 
 import os
+import re
 import sys
+import threading
 import time
 
 import requests
@@ -10,7 +12,7 @@ import requests
 from .errors import (NeedAuthError, BadContentError, IncompleteDownload,
                      TransientError, DownloadError, DetailFetchError,
                      CancelledError)
-from .net import build_session, validate_public_http_url
+from .net import build_session, get_with_redirect_check
 from .config import TOKEN_FILE, TOKEN_FILE_LEGACY, TOKEN_HELP, path_is_relative_to
 from .logutil import get_logger
 
@@ -49,7 +51,7 @@ def fetch_detail(cid, session, timeout):
     for tmpl in DETAIL_ENDPOINTS:
         url = tmpl.format(cid=cid)
         try:
-            resp = session.get(validate_public_http_url(url), timeout=timeout)
+            resp = get_with_redirect_check(session, url, timeout=timeout)
             if resp.status_code != 200:
                 last_err = f"HTTP {resp.status_code} @ {url.split('/')[2]}"
                 all_errs.append(last_err)
@@ -119,6 +121,21 @@ def append_access_token(url, token):
     """URL 查询参数方式携带令牌（部分线路支持，作为备选方案）"""
     sep = "&" if "?" in url else "?"
     return f"{url}{sep}accessToken={token}"
+
+
+_TOKEN_QPARAM_RE = re.compile(r"(accessToken=)[^&\s'\"<>]+")
+
+
+def redact_token(msg, token=None):
+    """抹掉消息里可能出现的令牌（P1-3）。
+
+    requests 异常的字符串形式会内嵌完整请求 URL——URL 参数方式的下载地址
+    带 accessToken，一旦原样进日志/tasks.json 就等于把令牌写在用户磁盘上。
+    双保险：优先抹去已知令牌值；再兜底抹掉 accessToken= 查询参数的值。"""
+    msg = str(msg or "")
+    if token:
+        msg = msg.replace(str(token), "***")
+    return _TOKEN_QPARAM_RE.sub(r"\1***", msg)
 
 
 
@@ -224,7 +241,8 @@ def download_file(urls, dest, session, retries=3, timeout=30, label="", on_progr
             try:
                 resume = tmp.stat().st_size if tmp.exists() else 0
                 headers = {"Range": f"bytes={resume}-"} if resume else {}
-                resp = session.get(validate_public_http_url(url), stream=True, timeout=timeout, headers=headers)
+                resp = get_with_redirect_check(session, url, stream=True,
+                                               timeout=timeout, headers=headers)
                 if resp.status_code in (401, 403):
                     raise NeedAuthError(f"HTTP {resp.status_code}")
                 if resp.status_code == 416:      # Range 越界：残留文件异常，重来
@@ -376,7 +394,8 @@ def _result(entry, title, status, msg):
 
 
 def process_one(entry, out_dir, auth, retries, timeout,
-                on_log=None, on_progress=None, item=None, flat_name=False):
+                on_log=None, on_progress=None, item=None, flat_name=False,
+                name_guard=None):
     """处理一条输入：解析 -> 取详情 -> 提取地址 -> 下载（含 401 令牌降级）。
 
     on_log:      日志回调（None 时打印到控制台）
@@ -417,10 +436,16 @@ def process_one(entry, out_dir, auth, retries, timeout,
     if not urls:
         return _result(entry, title, "fail", "未在教材信息中找到 PDF 地址")
 
-    # 3) 目标路径（重名去重 / 已下载跳过）
+    # 3) 目标路径（重名去重 / 已下载跳过）。
+    #    name_guard（并发名册）存在时用它分配：resolve_dest 的 exists() 检查
+    #    与后续写入之间存在 TOCTOU 窗口，多 worker 撞同名时会同时写一个 .part
+    #    交错写坏文件（P0-2）；名册在锁内原子分配，同 base 的后来者自动挪 (2)。
     meta = extract_metadata(detail)
     base = build_filename(meta, title, flat=flat_name)
-    dest, skip = resolve_dest(out_dir, base)
+    if name_guard is not None:
+        dest, skip = name_guard.resolve(out_dir, base)
+    else:
+        dest, skip = resolve_dest(out_dir, base)
     if skip:
         return _result(entry, title, "skip", f"文件已存在，跳过: {dest}")
 
@@ -461,7 +486,8 @@ def process_one(entry, out_dir, auth, retries, timeout,
     except OSError as e:
         return _result(entry, title, "fail", f"文件写入失败: {e}")
 
-    # 6) 备选方案：URL 追加 accessToken 查询参数
+    # 6) 备选方案：URL 追加 accessToken 查询参数。
+    #    本步所有失败消息都必须过 redact_token——异常文本会内嵌含令牌的 URL。
     try:
         variant_urls = [append_access_token(u, token) for u in urls]
         download_file(variant_urls, dest, auth.session, retries, timeout, label,
@@ -470,7 +496,8 @@ def process_one(entry, out_dir, auth, retries, timeout,
     except NeedAuthError:
         return _result(entry, title, "fail", "令牌无效或已过期，请重新获取 x-nd-auth 后重试")
     except DownloadError as e:
-        return _result(entry, title, "fail", f"下载失败: {e}")
+        return _result(entry, title, "fail",
+                       f"下载失败: {redact_token(e, token)}")
     except OSError as e:
         return _result(entry, title, "fail", f"文件写入失败: {e}")
 
@@ -478,6 +505,46 @@ def process_one(entry, out_dir, auth, retries, timeout,
 
 
 # ---------- 并发下载编排（P2-1） ----------
+class _NameRegistry:
+    """并发下载的目标文件名名册（P0-2 竞态修复）。
+
+    resolve_dest 的「存在性检查 -> 写入」存在 TOCTOU 窗口：两个 worker
+    对不同 contentId 解析出相同 base_name 时（结构化命名下 3672 本教材
+    只有 2034 个唯一名，碰撞真实存在），双方都会看到"目标不存在"，
+    然后同时写同一个 .part 文件交错写坏。名册把"查重 + 占名"放进
+    同一把锁原子完成：同 base 的后来者自动挪到 (2)、(3)…
+    名册生命周期 = 一次 download_many 调用，失败不释放（同一次运行内
+    不会重用该名字；重跑是新名册，resolve_dest 语义照常生效）。
+    """
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._claimed = set()
+
+    def resolve(self, out_dir, base_name):
+        """锁内原子分配：返回 (路径, 是否跳过)，语义与 naming.resolve_dest 一致，
+        额外保证本次运行内不会把同一路径分给两个 worker。"""
+        with self._lock:
+            out_root = out_dir.resolve()
+            candidate = out_dir / f"{base_name}.pdf"
+            i = 1
+            while True:
+                if not path_is_relative_to(candidate, out_root):
+                    raise DownloadError(f"保存路径越界，拒绝写入: {candidate}")
+                if str(candidate).lower() in self._claimed:
+                    i += 1
+                    candidate = out_dir / f"{base_name}({i}).pdf"
+                    continue
+                if candidate.exists():
+                    if candidate.stat().st_size > 1_000_000:
+                        return candidate, True     # 已有完整文件，跳过（不占名册）
+                    i += 1
+                    candidate = out_dir / f"{base_name}({i}).pdf"
+                    continue
+                self._claimed.add(str(candidate).lower())
+                return candidate, False
+
+
 def download_many(entries, out_dir, auth, retries=3, timeout=30,
                   workers=3, flat_name=False, on_log=None,
                   on_item_start=None, on_item_done=None,
@@ -492,13 +559,13 @@ def download_many(entries, out_dir, auth, retries=3, timeout=30,
         供 GUI 就地更新条目状态；回调异常不会打断下载
       - 结果顺序与输入一致（index 对齐），统计口径与串行版相同
     """
-    import threading
     from concurrent.futures import ThreadPoolExecutor
 
     workers = max(1, min(5, int(workers)))
     cancel_event = cancel_event or threading.Event()
     results = [None] * len(entries)
     lock = threading.Lock()
+    name_guard = _NameRegistry() if workers > 1 else None
 
     def _log(msg):
         try:
@@ -534,7 +601,7 @@ def download_many(entries, out_dir, auth, retries=3, timeout=30,
         try:
             res = process_one(entry, out_dir, auth, retries, timeout,
                               on_log=None, on_progress=_prog, item=item,
-                              flat_name=flat_name)
+                              flat_name=flat_name, name_guard=name_guard)
         except CancelledError:
             res = _result(entry, item.get("title"), "fail", "已取消")
         except Exception as e:  # 未预料异常不拖垮整个池

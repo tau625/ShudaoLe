@@ -45,5 +45,6 @@ select = ["E9", "F"]
 
 [tool.mypy]
 ignore_missing_imports = true
-# 宽松起步：先只查核心纯函数模块，逐步扩展（见 ROADMAP P1-5）
-files = ["shudaole/errors.py", "shudaole/config.py"]
+# 全包检查（2026-09-09 体检后放开：原先只查 errors/config 造成 CI 盲区，
+# 本地全包 4 个真实错误 CI 全绿。errors 已清零，此后保持全包门禁）
+files = ["shudaole"]

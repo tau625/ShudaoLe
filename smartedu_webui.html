@@ -1207,7 +1207,8 @@
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ target: info.zip_url, mode: 'url' })
-        }).then(function () {
+        }).then(function (r) {
+          if (!r.ok) throw new Error('open-failed');
           btnDl.textContent = '已请求浏览器下载';
         }).catch(function () {
           window.open(info.zip_url, '_blank');

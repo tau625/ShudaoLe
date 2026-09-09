@@ -192,9 +192,14 @@ def _pick_trigger_cid():
 
 
 def auto_token_status():
-    """返回当前一键获取令牌的状态快照"""
+    """返回当前一键获取令牌的状态快照。
+
+    令牌只随 phase=done 的首次查询交付，交付即从内存状态清除（P1-6）——
+    否则令牌会无限期滞留在状态 dict 里，任何本地进程轮询该端点都能读到。"""
     with AUTO_TOKEN_LOCK:
         s = AUTO_TOKEN_STATE.copy()
+        if s.get("phase") == "done" and s.get("token"):
+            AUTO_TOKEN_STATE["token"] = ""
     s.pop("cancel", None)
     return s
 
@@ -572,6 +577,21 @@ def run_task(payload):
     # 令牌来源: 页面填写 > 环境变量 SMARTEDU_TOKEN > token.txt；界面模式不允许控制台交互输入
     auth = AuthContext(initial_token(token), save_token=save_token, interactive=False)
 
+    # P2-10：让「记住令牌」勾选框真正生效——勾选且页面填写了令牌时落盘
+    # token.txt（AuthContext.save_token 只作用于交互式粘贴路径，GUI 恒为
+    # interactive=False 所以原先从不落盘，勾选框形同虚设）。
+    if save_token and token:
+        try:
+            TOKEN_FILE.parent.mkdir(parents=True, exist_ok=True)
+            TOKEN_FILE.write_text(token, encoding="utf-8")
+            if os.name != "nt":  # POSIX：令牌只属主可读写
+                try:
+                    os.chmod(TOKEN_FILE, 0o600)
+                except OSError:
+                    pass
+        except OSError:
+            pass  # 落盘失败不影响本次下载（令牌仍在内存里）
+
     items = [
         {"index": i, "entry": e, "title": None, "status": "pending",
          "downloaded": 0, "total": 0, "msg": "", "file": ""}
@@ -696,6 +716,14 @@ class Handler(BaseHTTPRequestHandler):
             if origin and origin.rstrip("/") not in {
                     f"http://127.0.0.1:{port}", f"http://localhost:{port}",
                     f"http://[::1]:{port}"}:
+                return False
+        else:
+            # GET 也挡跨站滥用（P1-7）：外部页面可以用 <img src=".../api/catalog?refresh=1">
+            # 无声触发 40MB 目录重下（DoS 级骚扰）。跨站 GET 一定带外域 Referer；
+            # 本机页面带本机 Referer；curl 等工具不带 Referer——只拦"带了但非本机"。
+            referer = (self.headers.get("Referer") or "").strip().lower()
+            if referer and urlsplit(referer).netloc not in {
+                    f"127.0.0.1:{port}", f"localhost:{port}", f"[::1]:{port}"}:
                 return False
         return True
 
@@ -844,22 +872,26 @@ class Handler(BaseHTTPRequestHandler):
     # ----- POST -----
 
     def _route_start(self):
-        with LOCK:
-            running = STATE["running"]
-        if running:
-            self._send_json({"error": "任务正在运行中，请先等待完成或点击停止"}, 409)
-            return
         try:
             payload = self._read_json_body()
         except ValueError as e:
             self._send_json({"error": f"请求解析失败: {e}"}, 400)
             return
+        # P1-5：检查与置位必须在同一锁段——原先分属两个锁段，快速双击
+        # 「开始下载」时两个请求都在对方置位前通过检查，会双开任务
         with LOCK:
-            STATE.update(running=True, cancel=False, items=[],
-                         summary=None,
-                         started_at=datetime.now().strftime("%H:%M:%S"),
-                         finished_at=None)
-            STATE["log"].clear()
+            if STATE["running"]:
+                busy = True
+            else:
+                busy = False
+                STATE.update(running=True, cancel=False, items=[],
+                             summary=None,
+                             started_at=datetime.now().strftime("%H:%M:%S"),
+                             finished_at=None)
+                STATE["log"].clear()
+        if busy:
+            self._send_json({"error": "任务正在运行中，请先等待完成或点击停止"}, 409)
+            return
         threading.Thread(target=run_task, args=(payload,), daemon=True).start()
         self._send_json({"ok": True})
 
@@ -902,15 +934,29 @@ class Handler(BaseHTTPRequestHandler):
     def _route_open(self):
         try:
             payload = self._read_json_body()
-            target = str(payload.get("path") or "").strip()
+            # path=本地路径；target=外部 URL（P2-5 更新横幅用，P0-1 此前后端
+            # 只认 path 导致「查看新版/一键下载」按钮从未生效）
+            target = str(payload.get("path") or payload.get("target") or "").strip()
             mode = str(payload.get("mode") or "file").strip()
-            if mode not in ("file", "dir", "reveal"):
+            if mode not in ("file", "dir", "reveal", "url"):
                 mode = "file"
         except ValueError:
             target = ""
             mode = "file"
         if not target:
             self._send_json({"error": "缺少路径"}, 400)
+            return
+        if mode == "url":
+            # URL 模式只放行 GitHub 相关 https 链接（更新横幅是唯一调用方），
+            # 防止被诱导的请求把任意 scheme/地址塞给浏览器打开
+            parts = urlsplit(target)
+            host = (parts.hostname or "").lower()
+            if parts.scheme != "https" or not (
+                    host == "github.com" or host.endswith(".github.com")):
+                self._send_json({"error": "只允许打开 GitHub 链接"}, 403)
+                return
+            webbrowser.open(target)
+            self._send_json({"ok": True})
             return
         # 打开动作只允许作用于当前任务的下载目录内，
         # 防止被诱导的请求用 os.startfile 打开/执行任意路径
@@ -1000,7 +1046,7 @@ class LocalServer(ThreadingHTTPServer):
     请求被随机分发到不同进程，表现为"点了下载没反应/进度不动"。置 0 后端口独占，
     重复启动会抛 OSError，配合单实例探测即可彻底避免多开。
     """
-    allow_reuse_address = 0
+    allow_reuse_address = False
     daemon_threads = True
 
 

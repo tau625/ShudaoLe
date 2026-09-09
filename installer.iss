@@ -72,10 +72,28 @@ Name: "{autodocs}\书到了教材"; Tasks: downloadsfolder
 Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
-; 只清理程序目录内我们生成的缓存/日志，绝不碰用户下载目录
-Type: files; Name: "{app}\catalog_cache.json"
+; 程序目录内的临时文件兜底清理（历史遗留路径 catalog_cache.json 已迁移至
+; 用户配置目录，条目删除）。下载目录绝不触碰。
 
 [Code]
+// 卸载完成时询问是否删除用户配置目录（登录令牌 token.txt / 目录缓存 / 任务记录）。
+// 令牌是敏感凭据，彻底卸载时应给用户清理的机会；默认推荐保留（重装可续用）。
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+var
+  cfgDir: String;
+begin
+  if CurUninstallStep = usPostUninstall then
+  begin
+    cfgDir := ExpandConstant('{%USERPROFILE}\.config\shudaole');
+    if DirExists(cfgDir) then
+      if MsgBox('是否同时删除保存的登录令牌与缓存数据？' #13#10
+                '(' + cfgDir + ')' #13#10 #13#10
+                '选「是」将需要重新获取登录令牌；选「否」保留供下次安装使用。',
+                mbConfirmation, MB_YESNO) = IDYES then
+        DelTree(cfgDir, True, True, True);
+  end;
+end;
+
 // 安装前 / 卸载前强制结束运行中的书到了：
 // 程序无 Win32 窗口（界面在浏览器里），taskkill 不带 /F 发 WM_CLOSE 收不到，
 // 只能强杀；下载任务有持久化（tasks.json），强杀无损，下次启动会提示续传。

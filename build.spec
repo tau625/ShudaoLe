@@ -51,7 +51,7 @@ a = Analysis(
         'urllib3.util.retry',
         'urllib3.poolmanager',
         'urllib3.connection',
-        'auto_fetch_token',
+        'shudaole.token',
     ],
     hookspath=[],
     hooksconfig={},
