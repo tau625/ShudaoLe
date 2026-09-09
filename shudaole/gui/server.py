@@ -1060,6 +1060,69 @@ def _acquire_app_mutex():
         return None
 
 
+def _find_browser_exe():
+    """找一台 Chrome 系浏览器可执行文件（支持 --app 独立窗口模式）。
+
+    按平台探测常见安装位置；找不到返回 None，调用方回退系统默认浏览器。
+    """
+    candidates = []
+    if os.name == "nt":
+        candidates += [
+            r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+            r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+            r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+            r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+            os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome\Application\chrome.exe"),
+        ]
+        # 文件位置探测失败再查注册表 App Paths（覆盖自定义安装路径）
+        try:
+            import winreg
+            for exe, root in (("msedge.exe", winreg.HKEY_LOCAL_MACHINE),
+                              ("msedge.exe", winreg.HKEY_CURRENT_USER),
+                              ("chrome.exe", winreg.HKEY_LOCAL_MACHINE),
+                              ("chrome.exe", winreg.HKEY_CURRENT_USER)):
+                try:
+                    with winreg.OpenKey(root, rf"SOFTWARE\Microsoft\Windows"
+                                             rf"\CurrentVersion\App Paths\{exe}") as k:
+                        candidates.append(winreg.QueryValueEx(k, None)[0])
+                except OSError:
+                    continue
+        except Exception:
+            pass
+    elif sys.platform == "darwin":
+        candidates += [
+            "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+            "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+            "/Applications/Chromium.app/Contents/MacOS/Chromium",
+        ]
+    else:
+        for name in ("microsoft-edge", "microsoft-edge-stable", "google-chrome-stable",
+                     "google-chrome", "chromium-browser", "chromium", "brave-browser"):
+            w = shutil.which(name)
+            if w:
+                candidates.append(w)
+    for p in candidates:
+        if p and os.path.isfile(p):
+            return p
+    return None
+
+
+def _open_in_app_mode(url):
+    """用 Chrome 系浏览器的 --app 模式打开界面：无地址栏、任务栏独立图标、
+    自带窗口标题，观感即桌面应用。找不到合适浏览器时回退系统默认浏览器。
+    """
+    exe = _find_browser_exe()
+    if exe:
+        try:
+            subprocess.Popen([exe, "--app=" + url, "--window-size=1120,820"],
+                             close_fds=(os.name != "nt"))
+            add_log(f"已以独立窗口模式打开界面: {os.path.basename(exe)}")
+            return
+        except OSError as e:
+            add_log(f"独立窗口模式启动失败({e})，回退默认浏览器")
+    webbrowser.open(url)
+
+
 def main():
     _app_mutex = _acquire_app_mutex()  # noqa: F841 保活到进程退出
     attach_callback(add_log)  # P1-3：shudaole.* 日志同源进界面缓冲
@@ -1083,7 +1146,7 @@ def main():
     if _probe_existing(args.port):
         url = f"http://127.0.0.1:{args.port}"
         if not args.no_browser:
-            webbrowser.open(url)
+            _open_in_app_mode(url)
         _notify("书到了", f"书到了已在运行中，已为你打开现有窗口：\n{url}")
         return 0
 
@@ -1101,7 +1164,7 @@ def main():
     print("=" * 56)
 
     if not args.no_browser:
-        threading.Timer(0.6, lambda: webbrowser.open(url)).start()
+        threading.Timer(0.6, lambda: _open_in_app_mode(url)).start()
 
     # 后台预载教材目录（有磁盘缓存则秒回；无则下载约 40MB，打开页面时若未就绪会显示加载中）
     def _warm_catalog():

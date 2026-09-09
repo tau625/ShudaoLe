@@ -3,6 +3,16 @@
 本文件记录「书到了」（ShudaoLe）各版本的用户可感知变更。格式参照
 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## [1.3.3] · 2026-09-09
+
+「独立窗口版」：界面不再挤在浏览器标签页里。
+
+### 变更
+
+- **界面以独立窗口打开**：启动后自动用 Edge/Chrome 的应用模式（`--app`）打开界面——无地址栏、任务栏独立图标、自带窗口标题，观感即桌面应用
+- 未装 Edge/Chrome（或启动失败）时自动回退系统默认浏览器，功能不受影响
+- 从其他程序跳转界面（如重复双击 exe 复用已有实例）同样走独立窗口
+
 ## [1.3.2] · 2026-09-09
 
 「体验修复版」：安装/卸载流程与目录选择对话框的用户可感知问题修复。
@@ -103,6 +113,7 @@
 
 首个公开版本：一键下载国家中小学智慧教育平台官方教材 PDF（Windows 绿色版）。
 
+[1.3.3]: https://github.com/tau625/ShudaoLe/releases/tag/v1.3.3
 [1.3.2]: https://github.com/tau625/ShudaoLe/releases/tag/v1.3.2
 [1.3.1]: https://github.com/tau625/ShudaoLe/releases/tag/v1.3.1
 [1.3.0]: https://github.com/tau625/ShudaoLe/releases/tag/v1.3.0
