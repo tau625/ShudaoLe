@@ -19,7 +19,7 @@ https://github.com/user-attachments/assets/2e59032c-0cc7-4e00-802e-52b620c795b5
 
 | 平台 | 方式 |
 |---|---|
-| Windows | 从 [Releases](https://github.com/tau625/ShudaoLe/releases/latest) 下载 `ShudaoLe-X.Y.Z-windows-x64.zip`，解压后双击 `书到了.exe` |
+| Windows（推荐） | 从 [Releases](https://github.com/tau625/ShudaoLe/releases/latest) 下载 `ShudaoLe-X.Y.Z-setup.exe` 安装版（简体中文向导、开始菜单/桌面快捷方式、标准卸载器）；绿色版取 `ShudaoLe-X.Y.Z-windows-x64.zip`，解压后双击 `书到了.exe` |
 | macOS（Apple Silicon） | 下载 `ShudaoLe-X.Y.Z-macos.zip`，解压后在终端执行 `xattr -cr 书到了`（去除隔离属性）再 `./书到了` |
 | Linux（x64，glibc ≥ 2.35） | 下载 `ShudaoLe-X.Y.Z-linux-x64.tar.gz`，解压后 `chmod +x 书到了 && ./书到了` |
 | 任意平台（源码运行） | 克隆本仓库 → `pip install -r requirements.txt` → `python smartedu_downloader_gui.py`（网页界面）或 `python smartedu_downloader.py`（命令行） |
@@ -33,20 +33,27 @@ https://github.com/user-attachments/assets/2e59032c-0cc7-4e00-802e-52b620c795b5
 ```
 smartedu-教材下载器/
 ├── shudaole/                     # 核心包（P1-1 起实现拆分于此）
-│   ├── cli.py                    #   命令行入口（参数解析/批量流程）
+│   ├── cli.py                    #   命令行入口（参数解析/批量流程/--export/--dry-run）
 │   ├── catalog.py                #   教材目录（抓取/规范化/级联筛选）
-│   ├── download.py               #   下载内核（详情/重试/令牌管理）
+│   ├── download.py               #   下载内核（详情/重试/令牌管理/并发 worker 池）
 │   ├── naming.py                 #   命名与链接解析（纯函数）
 │   ├── net.py                    #   Session 构造与 SSRF 校验
 │   ├── config.py                 #   配置路径（令牌/缓存位置）
 │   ├── logutil.py                #   日志设施（CLI/GUI 同源）
 │   ├── token.py                  #   一键获取登录令牌（纯 Python，零依赖）
-│   └── gui/                      #   本地网页界面服务（127.0.0.1）
+│   ├── tasks.py                  #   任务会话持久化（崩溃/关窗后恢复）
+│   ├── pubs.py                   #   用户级出版社配置外置（~/.config/shudaole/pubs.json）
+│   ├── update.py                 #   GitHub Releases 更新检查（仅版本号，无遥测）
+│   ├── errors.py                 #   自定义异常（CancelledError 等）
+│   └── gui/                      #   本地网页界面服务（127.0.0.1，路由表分发）
 ├── smartedu_downloader.py        # thin shim → shudaole.cli（用法不变）
 ├── smartedu_downloader_gui.py    # thin shim → shudaole.gui（用法不变）
 ├── smartedu_webui.html           # 网页界面（被 gui 读取，位于仓库根目录）
 ├── auto_fetch_token.py           # thin shim → shudaole.token（用法不变）
 ├── tests/                        # pytest 测试（纯函数 + requests-mock）
+├── installer.iss                 # Inno Setup 安装包脚本（CI 用，简体中文向导）
+├── installer-notice.txt          # 安装包向导首页说明文案
+├── ChineseSimplified.isl         # Inno 简体中文语言文件（runner 自带的不含，故捆绑）
 ├── make_icon.py                  # 生成 app.ico 图标（纯标准库，无需 Pillow）
 ├── app.ico                       # 程序图标（由 make_icon.py 生成）
 ├── version_info.txt              # Windows 版本资源（打包时写入 exe 文件属性）
@@ -56,6 +63,8 @@ smartedu-教材下载器/
 ├── pyproject.toml                # 包元数据与工具配置（ruff/mypy/pytest）
 ├── requirements.txt              # Python 依赖
 ├── links.example.txt             # 批量链接输入示例
+├── .github/workflows/            # ci.yml（质量门禁）+ release.yml（推 tag 自动三平台发版）
+├── CHANGELOG.md                  # 版本变更记录
 └── README.md                     # 本文件
 ```
 
@@ -311,8 +320,24 @@ PowerShell `Remove-Item` 重定向到回收站工具。该工具遇到**中文�
 - 装依赖用 `python -m pip install`，**不要用裸 `pip`**（可能指向别的 Python 版本）。
 - 令牌抓取已整合进 GUI 进程内（`auto_fetch_token.run_token_fetch`），
   **不要改回 subprocess 调外部 Python**——那样对方机器就必须装 Python。
-- 筛选维度规则统一定义在 `smartedu_downloader.py` 顶部，CLI 与 GUI 共用。
+- 筛选维度规则统一定义在 `shudaole/catalog.py`（PUB_GROUPS/SUPPORTED_SCOPE/ENABLED_DIMS），CLI 与 GUI 共用。
 - 新增维度排序表时记得同步注册进 `DIM_ORDERS`。
+
+### 6. Inno Setup 安装包在 CI 的两个坑（v1.3.0 踩过）
+
+- **windows-latest 自带的 Inno Setup 不含简体中文语言文件**（`ChineseSimplified.isl`
+  属"非官方翻译"）。解法：语言文件已捆绑在仓库根目录（取自 jrsoftware/issrc
+  `is-6_7_1` tag，UTF-8 版式，Inno 6.5+ 默认按 UTF-8 读 `.isl`），
+  `installer.iss` 用相对引用 `MessagesFile: "ChineseSimplified.isl"`。
+- **Inno 默认把产物输出到 `Output\` 子目录**：编译成功但 CI 的存在性校验和
+  上传通配符（`ShudaoLe-*`）都在仓库根找 → 误报失败。已加 `OutputDir=.`。
+
+### 7. 发版 CI 失败（纯构建问题）的处置
+
+- 只动构建配置、不动程序代码的修复，**直接移动未发成功的 tag 重跑**
+  （删远端 tag → 重打 → 推），不必 bump 版本号；删 tag 不会删掉 Release 对象。
+- 重跑后记得用 `gh api repos/tau625/ShudaoLe/releases/tags/vX.Y.Z` 核对附件
+  是否四件齐（setup.exe / windows zip / macos zip / linux tar.gz）。
 
 ## 版本与发布规范
 

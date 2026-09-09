@@ -530,6 +530,51 @@
     return removed;
   }
 
+  /* ---------- P3-1 统一刷新协调器 ----------
+     原 4 个独立定时器（状态 700ms / 令牌 1000ms / 残留检测 3000ms / 计数兜底
+     1500ms）合并为单个 250ms 心跳 + 任务登记表，按两个规则调节频率：
+       1) 页面不可见（document.hidden）时周期 ×4，降低后台标签页占用；
+       2) 状态轮询按"状态机"调节：任务运行中/刚打开页面用 700ms 快频率，
+          空闲时降到 1500ms（令牌/残留/计数保持原周期不变）。
+     约束：只改"何时轮询"。各任务函数体、请求端点、DOM id 一律保持原名；
+     任务 fn 返回 false 表示自行终止（用于有界的收尾轮询）。 */
+  const Poller = (function () {
+    const TICK = 250;
+    const tasks = {};
+    function periodOf(t) {
+      const p = typeof t.every === 'function' ? t.every() : t.every;
+      return document.hidden ? p * 4 : p;
+    }
+    function tick() {
+      const now = Date.now();
+      for (const name in tasks) {
+        const t = tasks[name];
+        if (!t.active || t.busy || t.runs >= t.maxRuns) continue;
+        if (now - t.last < periodOf(t)) continue;
+        t.last = now; t.busy = true; t.runs++;
+        Promise.resolve().then(t.fn).catch(() => {}).then((keep) => {
+          t.busy = false;
+          if (keep === false || t.runs >= t.maxRuns) Poller.unregister(name);
+        });
+      }
+    }
+    const Poller = {
+      register(name, fn, opts) {
+        opts = opts || {};
+        tasks[name] = { fn, every: opts.every || 1000, active: opts.active !== false,
+                        runs: 0, maxRuns: opts.maxRuns || Infinity,
+                        last: 0, busy: false };
+      },
+      unregister(name) { delete tasks[name]; },
+      setActive(name, on) { if (tasks[name]) tasks[name].active = !!on; },
+      kick(name) { if (tasks[name]) tasks[name].last = 0; }  // 下个心跳立即执行
+    };
+    setInterval(tick, TICK);
+    return Poller;
+  })();
+
+  const _pageLoadedAt = Date.now();
+
   async function refresh() {
     try {
       const r = await fetch('/api/status');
@@ -543,8 +588,11 @@
         _wasRunning = s.running;
       }
     } catch (e) { /* 服务未就绪，忽略 */ }
-    setTimeout(refresh, 700);
   }
+  // 状态轮询（原 700ms 定时循环）：运行中/刚进页面 700ms，空闲 1500ms
+  Poller.register('status', refresh, {
+    every: () => (_wasRunning || Date.now() - _pageLoadedAt < 10000) ? 700 : 1500,
+  });
 
   $('#btn-start').onclick = async () => {
     const body = {
@@ -582,10 +630,15 @@
   };
 
   /* ---------- 一键获取令牌 ---------- */
-  let autoTokenTimer = null;
   const tokenStatus = $('#token-status');
   const btnAuto = $('#btn-auto-token');
   const btnAbort = $('#btn-abort-token');
+
+  // P3-1：三处令牌状态请求（轮询/收尾确认/残留检测）合一的公共取数函数
+  async function fetchTokenStatus() {
+    const r = await fetch('/api/auto-token/status');
+    return r.json();
+  }
 
   function showTokenStatus(cls, text) {
     if (text) {
@@ -599,7 +652,7 @@
   }
 
   function stopAutoTokenPolling() {
-    if (autoTokenTimer) { clearInterval(autoTokenTimer); autoTokenTimer = null; }
+    Poller.setActive('token', false);
     btnAuto.disabled = false;
     btnAbort.hidden = true;
   }
@@ -607,8 +660,7 @@
   async function pollAutoToken() {
     let st;
     try {
-      const r = await fetch('/api/auto-token/status');
-      st = await r.json();
+      st = await fetchTokenStatus();
     } catch (e) { stopAutoTokenPolling(); showTokenStatus('error', '无法连接服务'); return; }
 
     if (st.phase === 'waiting' || st.phase === 'starting') {
@@ -632,6 +684,8 @@
     stopAutoTokenPolling();
     if (st.message === '已放弃') showTokenStatus('', '');   // 放弃则静默收起
   }
+  // 令牌轮询（原 1000ms setInterval）：默认不激活，点击"一键获取"后开启
+  Poller.register('token', pollAutoToken, { every: 1000, active: false });
 
   btnAuto.onclick = async () => {
     btnAuto.disabled = true;
@@ -649,8 +703,8 @@
       showTokenStatus('error', '❌ ' + e.message + '（若浏览器已弹出，可直接在里面登录）');
       return;
     }
-    if (!autoTokenTimer) autoTokenTimer = setInterval(pollAutoToken, 1000);
-    pollAutoToken();
+    Poller.setActive('token', true);
+    Poller.kick('token');
   };
 
   btnAbort.onclick = async () => {
@@ -658,31 +712,30 @@
     try { await fetch('/api/auto-token/abort', { method: 'POST' }); } catch (e) {}
     stopAutoTokenPolling();
     showTokenStatus('waiting', '已请求结束，等待后端回收浏览器进程（1~3 秒）...');
-    // 短暂轮询确保 running 已经回到 false，再让用户重试
+    // 短暂轮询确保 running 已经回到 false，再让用户重试（原 500ms×8 次的有界循环）
     let n = 0;
-    const t = setInterval(async () => {
-      n++; if (n > 8) { clearInterval(t); showTokenStatus('', ''); btnAuto.disabled = false; return; }
+    Poller.register('token-settle', async () => {
+      n++;
       try {
-        const r = await fetch('/api/auto-token/status');
-        const st = await r.json();
-        if (!st.running) { clearInterval(t); showTokenStatus('', ''); btnAuto.disabled = false; }
-      } catch (e) { clearInterval(t); showTokenStatus('', ''); btnAuto.disabled = false; }
-    }, 500);
+        const st = await fetchTokenStatus();
+        if (!st.running) { showTokenStatus('', ''); btnAuto.disabled = false; return false; }
+      } catch (e) { showTokenStatus('', ''); btnAuto.disabled = false; return false; }
+      if (n >= 8) { showTokenStatus('', ''); btnAuto.disabled = false; return false; }
+    }, { every: 500, maxRuns: 8 });
   };
 
   // 兜底：页面加载时如果发现残留 waiting，也提供"放弃"按钮可用
   (function () {
-    setInterval(async () => {
+    Poller.register('token-watchdog', async () => {
       try {
-        const r = await fetch('/api/auto-token/status');
-        const st = await r.json();
+        const st = await fetchTokenStatus();
         if (st.running && st.phase === 'waiting' && btnAbort.hidden) {
           btnAbort.hidden = false;
           showTokenStatus('waiting', '⏳ 检测到上次流程未正常结束，可点"放弃"清理后再重试；'
             + '或继续等待浏览器中登录完成。');
         }
       } catch (e) {}
-    }, 3000);
+    }, { every: 3000 });
   })();
 
   /* ---------- 目录筛选选教材 ----------
@@ -1037,7 +1090,7 @@
     }
     linksTa.addEventListener('input', refreshMeta);
     $('#token').addEventListener('input', refreshMeta);
-    setInterval(refreshMeta, 1500);
+    Poller.register('meta', refreshMeta, { every: 1500 });   // P3-1：并入统一协调器
     refreshMeta();
   })();
 

@@ -1,0 +1,89 @@
+# 更新日志（Changelog）
+
+本文件记录「书到了」（ShudaoLe）各版本的用户可感知变更。格式参照
+[Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
+
+## [1.3.0] · 2026-09-09
+
+「功能增强版」：P2 六项落地 + P1 工程化地基，首个提供 Windows 安装包的版本。
+
+### 新增
+
+- **并发下载**：多文件并行下载（默认 3 线程，界面可调 1–5），单文件失败不影响整批，随时可取消
+- **任务恢复**：关闭窗口后未完成任务自动保存，下次启动一键续传（含 `.part` 断点续传强化）
+- **CLI 脚本化**：`--export` 导出 CSV（带 BOM）/Markdown 书单、`--dry-run` 仅列出待下载项、退出码规范化
+- **更新检查**：启动时静默比对 GitHub Releases 最新版本（仅版本号，无遥测），界面一键跳转下载；`SHUDAOLE_NO_UPDATE_CHECK` 可关闭，`SHUDAOLE_UPDATE_MIRROR` 可配镜像
+- **Windows 安装包**：Inno Setup 简体中文向导（开始菜单/桌面快捷方式、标准卸载器、可选创建下载子目录），与绿色版 zip 并存
+
+### 变更
+
+- **出版社配置外置**：`~/.config/shudaole/pubs.json` 深合并扩展出版社分组，无需改代码
+- 界面轮询合并为统一刷新协调器（单心跳，按页面可见性与任务状态调节频率），降低常驻开销
+- GUI 服务端路由改为字典分发（新增端点 = 一个方法 + 一行表项）
+
+### 工程（不影响使用方式）
+
+- 单文件拆分为 `shudaole/` 包（13 模块 + gui 子包），根脚本保留为兼容入口
+- pytest 测试 59 例 + 覆盖率门禁；CI 矩阵 Python 3.8/3.10/3.12（ruff + mypy + pytest）
+- 统一 logging（文件 + 控制台/界面双通道）；保持 Python 3.8 兼容基线
+
+## [1.2.1] · 2026-09-09
+
+「正确性修复」补丁版（P0 五项）。
+
+### 修复
+
+- 浏览器 profile 目录命名泄漏（用户名路径外泄至临时目录名）
+- 目录缓存非原子写（中断产生损坏缓存导致目录加载失败）
+- WebSocket 连续帧支持（部分网络环境令牌抓取收不到完整响应）
+- 令牌落盘位置与权限（迁移到用户配置目录，收紧文件权限）
+- 收窄裸 `except`（异常不再静默吞掉，便于定位问题）
+
+## [1.2.0] · 2026-09-05
+
+「跨平台支持」版本。
+
+### 新增
+
+- macOS / Linux 构建：CI 三平台自动打包发布（macOS 未签名，首跑需绕过 Gatekeeper）
+- 一键获取令牌支持三平台（自动探测系统 Edge/Chrome，无需装 Python）
+
+### 修复
+
+- 中文名环境多实例端口冲突（表现为「点了下载没反应」）
+
+## [1.1.1] · 2026-09-05
+
+本地服务安全加固。
+
+### 安全
+
+- Host 头校验：拦截 DNS 重绑定攻击（恶意网页将域名解析到 127.0.0.1 窃取令牌/任务数据）
+- POST 请求 Origin 校验：拦截浏览器跨站伪造请求（CSRF）
+- 修复「选择目录」对话框的 PowerShell 单引号注入
+- 「打开文件/目录」仅允许作用于当前任务下载目录内
+
+## [1.1.0] · 2026-09-05
+
+界面体验修复（toast 不遮挡操作、取消粘性表头、已选条件空灰条、窄窗口换行等）。
+
+## [1.0.2] · 2026-09-04
+
+版本号单一数据源：界面显示与 exe 文件属性统一从 `version_info.txt` 解析，发版只改一处。
+
+## [1.0.1] · 2026-09-04
+
+界面品牌化重构：印章 logo、朱砂主色、步骤化布局（功能逻辑不变）。
+
+## [1.0.0] · 2026-09-04
+
+首个公开版本：一键下载国家中小学智慧教育平台官方教材 PDF（Windows 绿色版）。
+
+[1.3.0]: https://github.com/tau625/ShudaoLe/releases/tag/v1.3.0
+[1.2.1]: https://github.com/tau625/ShudaoLe/releases/tag/v1.2.1
+[1.2.0]: https://github.com/tau625/ShudaoLe/releases/tag/v1.2.0
+[1.1.1]: https://github.com/tau625/ShudaoLe/releases/tag/v1.1.1
+[1.1.0]: https://github.com/tau625/ShudaoLe/releases/tag/v1.1.0
+[1.0.2]: https://github.com/tau625/ShudaoLe/releases/tag/v1.0.2
+[1.0.1]: https://github.com/tau625/ShudaoLe/releases/tag/v1.0.1
+[1.0.0]: https://github.com/tau625/ShudaoLe/releases/tag/v1.0.0

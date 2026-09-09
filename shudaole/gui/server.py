@@ -583,224 +583,282 @@ class Handler(BaseHTTPRequestHandler):
         self._send(json.dumps(obj, ensure_ascii=False),
                    "application/json; charset=utf-8", code)
 
+    # ---------- 路由处理方法（P3-2：从 do_GET/do_POST 的 if-elif 抽出） ----------
+    # 说明：各方法体与重构前的分支体逐行一致，仅把「路径 -> 方法」的映射改为
+    # 类级字典 GET_ROUTES / POST_ROUTES 分发。新增端点 = 加一个方法 + 一行表项。
+
+    def _read_json_body(self, max_size=1_000_000):
+        """读取并解析 POST 的 JSON 请求体（重复三处的公共逻辑收敛）。
+
+        成功返回 dict；失败抛 ValueError（含可展示的错误消息）。
+        空请求体按空对象处理。
+        """
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+            if length > max_size:
+                raise ValueError("请求体过大")
+            payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+        except ValueError:
+            raise
+        except Exception as e:
+            raise ValueError(f"请求解析失败: {e}")
+        if not isinstance(payload, dict):
+            raise ValueError("无效的请求数据")
+        return payload
+
+    # ----- GET -----
+
+    def _route_index(self):
+        try:
+            self._send(HTML_FILE.read_text(encoding="utf-8"),
+                       "text/html; charset=utf-8")
+        except OSError as e:
+            self._send_json({"error": f"界面文件缺失: {e}"}, 500)
+
+    def _route_catalog(self):
+        q = parse_qs(urlsplit(self.path).query or "")
+        refresh = "refresh" in q
+        ids_only = (q.get("ids_only") or ["0"])[0] in ("1", "true")
+        filters = {k: (v[0] or "") for k, v in q.items()
+                   if k in FILTER_DIMS and (v[0] or "").strip()}
+        keyword = (q.get("keyword") or [""])[0].strip()
+        include_resources = (q.get("include_resources") or ["0"])[0] in ("1", "true")
+        try:
+            limit = int((q.get("limit") or ["300"])[0])
+        except ValueError:
+            limit = 300
+        try:
+            items = get_catalog(refresh=refresh)
+            # ids_only：只要 id 列表，供"全部加入下载列表"绕开界面展示条数上限，
+            # 否则用户以为加了全部，实际只加了前 limit 条。
+            if ids_only:
+                hits = search_catalog(items, keyword=keyword,
+                                      include_resources=include_resources,
+                                      **filters)
+                self._send_json({"ok": True, "total": len(hits),
+                                 "ids": [it["id"] for it in hits]})
+                return
+            # 一次调用同时拿到全量命中与级联候选（内部复用，不重复遍历）
+            result = catalog_facets(items, filters, keyword=keyword,
+                                    include_resources=include_resources)
+            matches = result["items"]
+            # 版本维度下发「分组 + 真实标签」两级候选：平台把人教系的语文/数学/
+            # 科学标成了三个不同标签，只给分组则无法精确选，只给标签则下全套要选三次
+            result["facets"]["publisher"] = publisher_facets(
+                result["facets"].get("publisher", []))
+            payload = {
+                "ok": True,
+                "total": len(matches),          # 命中总数（含版本组约束）
+                "returned": min(len(matches), limit),
+                "items": matches[:limit],       # 结果行（已按认知顺序排序）
+                "facets": result["facets"],     # 级联用的各维度可选值+计数
+                "dim_labels": DIM_LABELS,
+                "enabled_dims": list(ENABLED_DIMS),  # 前端据此动态渲染下拉
+                "scope": SUPPORTED_SCOPE,       # 完整支持范围（其余为占位）
+                "default_filters": DEFAULT_FILTERS,  # 首屏替用户预选的条件
+            }
+            if not matches:
+                # 空结果只说"没有匹配"毫无帮助；告诉用户去掉哪条能找回结果
+                payload["relax_hints"] = relax_suggestions(
+                    items, filters, keyword=keyword,
+                    include_resources=include_resources)
+            self._send_json(payload)
+        except Exception as e:
+            self._send_json({"error": f"教材目录获取失败: {e}"}, 502)
+
+    def _route_auto_token_status(self):
+        self._send_json(auto_token_status())
+
+    def _route_pending_session(self):
+        # P2-2：启动时查询上次未完成的任务会话（继续/放弃）
+        try:
+            from .. import tasks as tasks_store
+            sess = tasks_store.load_session()
+            if sess and tasks_store.has_unfinished(sess):
+                self._send_json({
+                    "pending": True,
+                    "out_dir": sess.get("out_dir", ""),
+                    "entries": sess.get("entries", []),
+                    "counts": {
+                        "ok": sum(1 for x in sess.get("items") or []
+                                  if x.get("status") == "ok"),
+                        "total": len(sess.get("entries") or []),
+                    },
+                    "saved_at": sess.get("saved_at", 0),
+                })
+            else:
+                self._send_json({"pending": False})
+        except Exception:
+            self._send_json({"pending": False})
+
+    def _route_update_check(self):
+        # P2-5：查询最新版本（无遥测；失败/无新版返回 latest:null）
+        from .. import update as upd
+        res = upd.check_latest(APP_VERSION, force=True)
+        self._send_json({"latest": res} if res else {"latest": None})
+
+    def _route_status(self):
+        with LOCK:
+            payload = {
+                "running": STATE["running"],
+                "cancel": STATE["cancel"],
+                "items": [dict(x) for x in STATE["items"]],
+                "log": list(STATE["log"])[-300:],
+                "summary": STATE["summary"],
+                "out_dir": STATE.get("out_dir", ""),
+                "started_at": STATE["started_at"],
+                "finished_at": STATE["finished_at"],
+                "version": APP_VERSION,
+            }
+        self._send_json(payload)
+
+    # ----- POST -----
+
+    def _route_start(self):
+        with LOCK:
+            running = STATE["running"]
+        if running:
+            self._send_json({"error": "任务正在运行中，请先等待完成或点击停止"}, 409)
+            return
+        try:
+            payload = self._read_json_body()
+        except ValueError as e:
+            self._send_json({"error": f"请求解析失败: {e}"}, 400)
+            return
+        with LOCK:
+            STATE.update(running=True, cancel=False, items=[],
+                         summary=None,
+                         started_at=datetime.now().strftime("%H:%M:%S"),
+                         finished_at=None)
+            STATE["log"].clear()
+        threading.Thread(target=run_task, args=(payload,), daemon=True).start()
+        self._send_json({"ok": True})
+
+    def _route_auto_token(self):
+        # 前置检查：浏览器是否可用（令牌抓取逻辑已整合进进程内，无外部脚本依赖）
+        if not _browser_available():
+            self._send_json(
+                {"error": "未检测到 Edge/Chrome 浏览器，无法自动登录抓取令牌。"
+                          "请手动获取并粘贴令牌。"}, 400)
+            return
+        ok, err = auto_token_start()
+        if not ok:
+            self._send_json({"error": err}, 409 if "运行" in err else 500)
+            return
+        add_log("已启动\"一键获取令牌\"：已打开浏览器，请在弹出的窗口登录平台")
+        self._send_json({"ok": True})
+
+    def _route_auto_token_abort(self):
+        ok, msg = auto_token_abort()
+        add_log("已放弃自动获取令牌")
+        self._send_json({"ok": True, "message": msg})
+
+    def _route_choose_dir(self):
+        # 用系统资源管理器选择保存目录（会弹窗，等待用户选择后返回）
+        try:
+            payload = self._read_json_body()
+            start = str(payload.get("start") or "").strip()
+        except ValueError:
+            start = ""
+        chosen, status = pick_folder(start)
+        if status == "ok" and chosen:
+            self._send_json({"ok": True, "path": chosen})
+        elif status == "cancelled":
+            self._send_json({"ok": False, "cancelled": True,
+                             "error": "已取消选择"}, 400)
+        else:
+            self._send_json({"ok": False, "cancelled": False,
+                             "error": "目录选择失败，请重试"}, 400)
+
+    def _route_open(self):
+        try:
+            payload = self._read_json_body()
+            target = str(payload.get("path") or "").strip()
+            mode = str(payload.get("mode") or "file").strip()
+            if mode not in ("file", "dir", "reveal"):
+                mode = "file"
+        except ValueError:
+            target = ""
+            mode = "file"
+        if not target:
+            self._send_json({"error": "缺少路径"}, 400)
+            return
+        # 打开动作只允许作用于当前任务的下载目录内，
+        # 防止被诱导的请求用 os.startfile 打开/执行任意路径
+        with LOCK:
+            out_dir = STATE.get("out_dir", "")
+        if not out_dir or not _is_within(target, out_dir):
+            self._send_json({"error": "只允许打开下载目录内的文件"}, 403)
+            return
+        ok, msg = open_with_default(target, mode)
+        if not ok:
+            self._send_json({"error": msg}, 400)
+            return
+        self._send_json({"ok": True})
+
+    def _route_cancel(self):
+        with LOCK:
+            # 仅在任务运行中才置位，防止任务刚结束时到达的取消请求污染状态
+            if STATE["running"]:
+                STATE["cancel"] = True
+                stopping = True
+            else:
+                stopping = False
+        if stopping:
+            add_log("收到停止请求，将在当前下载点中断...")
+        self._send_json({"ok": True, "stopping": stopping})
+
+    def _route_discard_session(self):
+        # P2-2：放弃恢复上次会话（保留已下载文件，只清持久化记录）
+        try:
+            from .. import tasks as tasks_store
+            tasks_store.clear_session()
+            self._send_json({"ok": True})
+        except Exception as e:
+            self._send_json({"error": str(e)}, 500)
+
+    # 路由表：路径 -> 处理方法（P3-2）。/api/facets 是 /api/catalog 的历史别名。
+    GET_ROUTES = {
+        "/": _route_index,
+        "/index.html": _route_index,
+        "/api/catalog": _route_catalog,
+        "/api/facets": _route_catalog,
+        "/api/auto-token/status": _route_auto_token_status,
+        "/api/pending-session": _route_pending_session,
+        "/api/update-check": _route_update_check,
+        "/api/status": _route_status,
+    }
+    POST_ROUTES = {
+        "/api/start": _route_start,
+        "/api/auto-token": _route_auto_token,
+        "/api/auto-token/abort": _route_auto_token_abort,
+        "/api/choose-dir": _route_choose_dir,
+        "/api/open": _route_open,
+        "/api/cancel": _route_cancel,
+        "/api/discard-session": _route_discard_session,
+    }
+
     def do_GET(self):
         if not self._local_origin():
             self._send_json({"error": "拒绝非本机来源的请求"}, 403)
             return
         path = urlsplit(self.path).path
-        if path in ("/", "/index.html"):
-            try:
-                self._send(HTML_FILE.read_text(encoding="utf-8"),
-                           "text/html; charset=utf-8")
-            except OSError as e:
-                self._send_json({"error": f"界面文件缺失: {e}"}, 500)
-        elif path in ("/api/catalog", "/api/facets"):
-            q = parse_qs(urlsplit(self.path).query or "")
-            refresh = "refresh" in q
-            ids_only = (q.get("ids_only") or ["0"])[0] in ("1", "true")
-            filters = {k: (v[0] or "") for k, v in q.items()
-                       if k in FILTER_DIMS and (v[0] or "").strip()}
-            keyword = (q.get("keyword") or [""])[0].strip()
-            include_resources = (q.get("include_resources") or ["0"])[0] in ("1", "true")
-            try:
-                limit = int((q.get("limit") or ["300"])[0])
-            except ValueError:
-                limit = 300
-            try:
-                items = get_catalog(refresh=refresh)
-                # ids_only：只要 id 列表，供"全部加入下载列表"绕开界面展示条数上限，
-                # 否则用户以为加了全部，实际只加了前 limit 条。
-                if ids_only:
-                    hits = search_catalog(items, keyword=keyword,
-                                          include_resources=include_resources,
-                                          **filters)
-                    self._send_json({"ok": True, "total": len(hits),
-                                     "ids": [it["id"] for it in hits]})
-                    return
-                # 一次调用同时拿到全量命中与级联候选（内部复用，不重复遍历）
-                result = catalog_facets(items, filters, keyword=keyword,
-                                        include_resources=include_resources)
-                matches = result["items"]
-                # 版本维度下发「分组 + 真实标签」两级候选：平台把人教系的语文/数学/
-                # 科学标成了三个不同标签，只给分组则无法精确选，只给标签则下全套要选三次
-                result["facets"]["publisher"] = publisher_facets(
-                    result["facets"].get("publisher", []))
-                payload = {
-                    "ok": True,
-                    "total": len(matches),          # 命中总数（含版本组约束）
-                    "returned": min(len(matches), limit),
-                    "items": matches[:limit],       # 结果行（已按认知顺序排序）
-                    "facets": result["facets"],     # 级联用的各维度可选值+计数
-                    "dim_labels": DIM_LABELS,
-                    "enabled_dims": list(ENABLED_DIMS),  # 前端据此动态渲染下拉
-                    "scope": SUPPORTED_SCOPE,       # 完整支持范围（其余为占位）
-                    "default_filters": DEFAULT_FILTERS,  # 首屏替用户预选的条件
-                }
-                if not matches:
-                    # 空结果只说"没有匹配"毫无帮助；告诉用户去掉哪条能找回结果
-                    payload["relax_hints"] = relax_suggestions(
-                        items, filters, keyword=keyword,
-                        include_resources=include_resources)
-                self._send_json(payload)
-            except Exception as e:
-                self._send_json({"error": f"教材目录获取失败: {e}"}, 502)
-        elif path == "/api/auto-token/status":
-            self._send_json(auto_token_status())
-        elif path == "/api/pending-session":
-            # P2-2：启动时查询上次未完成的任务会话（继续/放弃）
-            try:
-                from .. import tasks as tasks_store
-                sess = tasks_store.load_session()
-                if sess and tasks_store.has_unfinished(sess):
-                    self._send_json({
-                        "pending": True,
-                        "out_dir": sess.get("out_dir", ""),
-                        "entries": sess.get("entries", []),
-                        "counts": {
-                            "ok": sum(1 for x in sess.get("items") or []
-                                      if x.get("status") == "ok"),
-                            "total": len(sess.get("entries") or []),
-                        },
-                        "saved_at": sess.get("saved_at", 0),
-                    })
-                else:
-                    self._send_json({"pending": False})
-            except Exception:
-                self._send_json({"pending": False})
-        elif path == "/api/update-check":
-            # P2-5：查询最新版本（无遥测；失败/无新版返回 latest:null）
-            from .. import update as upd
-            res = upd.check_latest(APP_VERSION, force=True)
-            self._send_json({"latest": res} if res else {"latest": None})
-        elif path == "/api/status":
-            with LOCK:
-                payload = {
-                    "running": STATE["running"],
-                    "cancel": STATE["cancel"],
-                    "items": [dict(x) for x in STATE["items"]],
-                    "log": list(STATE["log"])[-300:],
-                    "summary": STATE["summary"],
-                    "out_dir": STATE.get("out_dir", ""),
-                    "started_at": STATE["started_at"],
-                    "finished_at": STATE["finished_at"],
-                    "version": APP_VERSION,
-                }
-            self._send_json(payload)
-        else:
+        handler = self.GET_ROUTES.get(path)
+        if handler is None:
             self._send_json({"error": "not found"}, 404)
+            return
+        handler(self)
 
     def do_POST(self):
         if not self._local_origin():
             self._send_json({"error": "拒绝非本机来源的请求"}, 403)
             return
         path = urlsplit(self.path).path
-        if path == "/api/start":
-            with LOCK:
-                running = STATE["running"]
-            if running:
-                self._send_json({"error": "任务正在运行中，请先等待完成或点击停止"}, 409)
-                return
-            try:
-                length = int(self.headers.get("Content-Length") or 0)
-                if length > 1_000_000:
-                    raise ValueError("请求体过大")
-                payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
-                if not isinstance(payload, dict):
-                    raise ValueError("无效的请求数据")
-            except Exception as e:
-                self._send_json({"error": f"请求解析失败: {e}"}, 400)
-                return
-            with LOCK:
-                STATE.update(running=True, cancel=False, items=[],
-                             summary=None,
-                             started_at=datetime.now().strftime("%H:%M:%S"),
-                             finished_at=None)
-                STATE["log"].clear()
-            threading.Thread(target=run_task, args=(payload,), daemon=True).start()
-            self._send_json({"ok": True})
-        elif path == "/api/auto-token":
-            # 前置检查：浏览器是否可用（令牌抓取逻辑已整合进进程内，无外部脚本依赖）
-            if not _browser_available():
-                self._send_json(
-                    {"error": "未检测到 Edge/Chrome 浏览器，无法自动登录抓取令牌。"
-                              "请手动获取并粘贴令牌。"}, 400)
-                return
-            ok, err = auto_token_start()
-            if not ok:
-                self._send_json({"error": err}, 409 if "运行" in err else 500)
-                return
-            add_log("已启动\"一键获取令牌\"：已打开浏览器，请在弹出的窗口登录平台")
-            self._send_json({"ok": True})
-        elif path == "/api/auto-token/abort":
-            ok, msg = auto_token_abort()
-            add_log("已放弃自动获取令牌")
-            self._send_json({"ok": True, "message": msg})
-        elif path == "/api/choose-dir":
-            # 用系统资源管理器选择保存目录（会弹窗，等待用户选择后返回）
-            try:
-                length = int(self.headers.get("Content-Length") or 0)
-                start = ""
-                if length:
-                    payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
-                    start = str(payload.get("start") or "").strip()
-            except Exception:
-                start = ""
-            chosen, status = pick_folder(start)
-            if status == "ok" and chosen:
-                self._send_json({"ok": True, "path": chosen})
-            elif status == "cancelled":
-                self._send_json({"ok": False, "cancelled": True,
-                                 "error": "已取消选择"}, 400)
-            else:
-                self._send_json({"ok": False, "cancelled": False,
-                                 "error": "目录选择失败，请重试"}, 400)
-        elif path == "/api/open":
-            try:
-                length = int(self.headers.get("Content-Length") or 0)
-                payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
-                target = str(payload.get("path") or "").strip()
-                mode = str(payload.get("mode") or "file").strip()
-                if mode not in ("file", "dir", "reveal"):
-                    mode = "file"
-            except Exception:
-                target = ""
-                mode = "file"
-            if not target:
-                self._send_json({"error": "缺少路径"}, 400)
-                return
-            # 打开动作只允许作用于当前任务的下载目录内，
-            # 防止被诱导的请求用 os.startfile 打开/执行任意路径
-            with LOCK:
-                out_dir = STATE.get("out_dir", "")
-            if not out_dir or not _is_within(target, out_dir):
-                self._send_json({"error": "只允许打开下载目录内的文件"}, 403)
-                return
-            ok, msg = open_with_default(target, mode)
-            if not ok:
-                self._send_json({"error": msg}, 400)
-                return
-            self._send_json({"ok": True})
-        elif path == "/api/cancel":
-            with LOCK:
-                # 仅在任务运行中才置位，防止任务刚结束时到达的取消请求污染状态
-                if STATE["running"]:
-                    STATE["cancel"] = True
-                    stopping = True
-                else:
-                    stopping = False
-            if stopping:
-                add_log("收到停止请求，将在当前下载点中断...")
-            self._send_json({"ok": True, "stopping": stopping})
-        elif path == "/api/discard-session":
-            # P2-2：放弃恢复上次会话（保留已下载文件，只清持久化记录）
-            try:
-                from .. import tasks as tasks_store
-                tasks_store.clear_session()
-                self._send_json({"ok": True})
-            except Exception as e:
-                self._send_json({"error": str(e)}, 500)
-        else:
+        handler = self.POST_ROUTES.get(path)
+        if handler is None:
             self._send_json({"error": "not found"}, 404)
+            return
+        handler(self)
 
     def log_message(self, fmt, *args):
         pass  # 静默访问日志，避免控制台刷屏
