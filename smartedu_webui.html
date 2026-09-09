@@ -180,6 +180,9 @@
   button.small-btn { padding: 5px 14px; font-size: 13px; }
   .dir-input { display: flex; gap: 6px; align-items: stretch; }
   .dir-input input { flex: 1; min-width: 0; }
+  .out-hint { font-size: 12px; color: var(--muted); margin-top: 5px; line-height: 1.5; }
+  .out-hint b { color: var(--text); font-weight: 600; word-break: break-all; }
+  .out-hint.warn { color: var(--danger-fg); font-weight: 600; }
   button.act-btn { padding: 3px 10px; font-size: 12px; margin: 4px 8px 0 0; }
   .open-acts { margin-top: 5px; }
   .cat-status { font-size: 12px; color: var(--muted); font-weight: 400; margin-left: 8px; min-width: 0; flex: 0 1 auto; }
@@ -366,6 +369,7 @@
           <button id="btn-browse" type="button" class="ghost small-btn"
                   title="用资源管理器选择保存目录">浏览…</button>
         </span>
+        <span id="out-hint" class="out-hint">默认保存在「下载」目录的「书到了」文件夹</span>
       </label>
       <label>重试次数
         <input id="retries" class="small" type="number" value="3" min="1" max="10">
@@ -596,7 +600,7 @@
   $('#btn-start').onclick = async () => {
     const body = {
       links_text: $('#links').value,
-      output_dir: $('#output').value.trim() || 'downloads',
+      output_dir: $('#output').value.trim() || (window.__DEF_OUT_DIR__ || 'downloads'),
       token: $('#token').value.trim(),
       save_token: $('#save_token').checked,
       flat_name: $('#flat_name').checked,
@@ -1583,7 +1587,7 @@
       '请核对版本是否为孩子学校所用（悬浮版本名可见识别提示）</div>';
     html += '<div style="margin-bottom:4px">将下载 <b>' + entries.length + '</b> 本教材' +
       (missing ? '（<span style="color:#a05a2c">' + missing + ' 条链接未识别，下载时将按链接处理</span>）' : '') +
-      '　→　<span style="color:#666">' + escapeHtml(outDir || 'downloads') + '</span></div>';
+      '　→　<span style="color:#666">' + escapeHtml(outDir || (window.__DEF_OUT_DIR__ || 'downloads')) + '</span></div>';
     var MAXSHOW = 50;
     var rows = entries.slice(0, MAXSHOW).map(function (e) {
       return '<div style="padding:3px 0;border-bottom:1px dashed #eee">' +
@@ -1630,7 +1634,8 @@
       fetch('/api/resolve-entries?' + qs)
         .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
         .then(function (res) {
-          var outDir = ((document.getElementById('output') || {}).value || '').trim() || 'downloads';
+          var outDir = ((document.getElementById('output') || {}).value || '').trim()
+            || (window.__DEF_OUT_DIR__ || 'downloads');
           if (!res.ok || !res.j.entries) {
             confirmDialog([], ids.length, outDir, function () { if (origStart) origStart(); });
             return;
@@ -1715,6 +1720,82 @@
       return resp;
     });
   };
+})();
+
+// 保存目录提示 + 默认值统一（纯展示代码，不改既有 JS 逻辑与元素 id）。
+// 默认目录由后端 /api/status 下发（用户「下载」目录下的「书到了」文件夹），
+// 启动时回填进 #output，使保存位置与启动方式（CWD）彻底解耦；提示行显示
+// 真实绝对路径，避免「提示下载完成却找不到文件」。
+(function () {
+  var CWD = '';        // 后端下发的进程工作目录（解析用户手填的相对路径用）
+  var DEF_ABS = '';    // 后端下发的默认保存目录绝对路径
+  var DEF_OK = true;   // 默认目录是否可写
+
+  function isAbs(p) {
+    // Windows: C:\ 或 C:/ 或 \\server\share；POSIX: /
+    return /^([A-Za-z]:[\\/]|\\\\|\/)/.test(p);
+  }
+
+  function joinPath(base, rel) {
+    var sep = base.indexOf('\\') >= 0 ? '\\' : '/';
+    return base.replace(/[\\/]+$/, '') + sep + rel;
+  }
+
+  // 用户手填的相对路径按 CWD 本地推算；留空则用后端下发的默认目录
+  function toAbs(v) {
+    v = (v || '').trim();
+    if (!v) return DEF_ABS;              // 留空 = 用默认目录
+    if (isAbs(v)) return v;
+    return CWD ? joinPath(CWD, v) : v;   // 拿不到 CWD 时原样显示，不乱猜
+  }
+
+  function render() {
+    var el = document.getElementById('out-hint');
+    var input = document.getElementById('output');
+    if (!el) return;
+    var raw = ((input && input.value) || '').trim();
+    var isDefault = (!raw || (DEF_ABS && raw === DEF_ABS));
+    var abs = isDefault ? DEF_ABS : toAbs(raw);
+
+    var head = isDefault ? '默认保存在「下载」目录的「书到了」文件夹：' : '保存至：';
+    var html = head + '<b>' + escapeHtmlSafe(abs) + '</b>';
+
+    if (isDefault && DEF_OK === false) {
+      html += '<br>⚠ 该目录不可写入，请点「浏览…」改到桌面或文档等其他目录。';
+    }
+    el.innerHTML = html;
+    el.className = (isDefault && DEF_OK === false) ? 'out-hint warn' : 'out-hint';
+  }
+
+  function escapeHtmlSafe(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function init(d) {
+    if (!d) return;
+    CWD = d.cwd || '';
+    DEF_ABS = d.default_out_dir || '';
+    DEF_OK = d.default_dir_writable !== false;
+    // 供下载请求与确认弹窗取同一个默认值（603/1590/1637 行的兜底引用它）
+    window.__DEF_OUT_DIR__ = DEF_ABS;
+
+    var input = document.getElementById('output');
+    if (input && DEF_ABS) {
+      // 首次进入（或仍是旧的相对默认值）时回填绝对路径，与启动位置解耦
+      var cur = (input.value || '').trim();
+      if (!cur || cur === 'downloads') input.value = DEF_ABS;
+    }
+    if (input) {
+      // 用 addEventListener 追加，绝不覆盖既有 onchange / onclick
+      input.addEventListener('input', render);
+      input.addEventListener('change', render);
+    }
+    render();
+  }
+
+  fetch('/api/status').then(function (r) { return r.json(); })
+    .then(init).catch(function () { render(); });
 })();
 </script>
 </body>

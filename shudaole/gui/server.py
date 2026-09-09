@@ -81,6 +81,70 @@ def app_version() -> str:
 
 APP_VERSION = app_version()
 
+# ---------- 保存目录（单一数据源：默认落在用户「下载」目录） ----------
+APP_DIR_NAME = "书到了"
+
+
+def default_out_dir() -> Path:
+    """默认保存目录：用户「下载」目录下的「书到了」文件夹。
+
+    刻意不用相对路径 "downloads"：相对路径按进程工作目录（CWD）解析，而 CWD
+    取决于启动方式（快捷方式的「起始位置」、右键打开时所在目录…），会出现
+    「提示下载完成却找不到文件」；装在 Program Files 时更会因权限不足直接
+    PermissionError（PyInstaller 产出的 exe 带 manifest，UAC 文件虚拟化不生效）。
+    固定到用户目录下则与启动方式无关，且必定可写。
+
+    Downloads 不存在（部分 Linux/精简环境）时退回用户家目录。
+    """
+    home = Path.home()
+    downloads = home / "Downloads"
+    return (downloads if downloads.is_dir() else home) / APP_DIR_NAME
+
+
+def resolve_out_dir(value):
+    """把界面填的保存目录解析成 Path。
+
+    用户手填的相对路径仍按 CWD 解析（尊重其显式意图），留空才用默认目录。
+    """
+    return Path((value or "").strip() or str(default_out_dir())).expanduser()
+
+
+def out_dir_absolute(value):
+    """给用户看的绝对路径（目录尚不存在也能算出来）。"""
+    try:
+        return str(Path(os.path.abspath(str(resolve_out_dir(value)))))
+    except OSError:
+        return str(resolve_out_dir(value))
+
+
+# 写入探测有副作用（会建目录、写一个临时文件），结果按绝对路径缓存，
+# 否则前端每秒轮询 /api/status 会反复试探磁盘。
+_WRITABLE_CACHE: dict[str, bool] = {}
+
+
+def out_dir_writable(value):
+    """该保存目录是否真的可写。
+
+    装在 Program Files 时普通权限进程写不进去（PyInstaller 产出的 exe 带
+    manifest，UAC 文件虚拟化不生效），这时要提前在界面红字警告，而不是
+    等用户点「开始下载」才炸一个 PermissionError。
+    """
+    key = out_dir_absolute(value)
+    if key in _WRITABLE_CACHE:
+        return _WRITABLE_CACHE[key]
+    ok = False
+    try:
+        d = Path(key)
+        d.mkdir(parents=True, exist_ok=True)
+        probe = d / ".shudaole_write_test"
+        probe.write_text("", encoding="utf-8")
+        probe.unlink()
+        ok = True
+    except OSError:
+        ok = False
+    _WRITABLE_CACHE[key] = ok
+    return ok
+
 # ========== 一键获取令牌（进程内线程调用 auto_fetch_token.run_token_fetch） ==========
 # 令牌抓取逻辑整合进 GUI 进程内运行（import auto_fetch_token 模块），不再 subprocess
 # 调外部 Python，因此打包成 exe 后对方机器无需安装 Python，真正零依赖。
@@ -689,7 +753,7 @@ def get_catalog(refresh=False):
 def run_task(payload):
     try:
         entries = parse_entries(payload.get("links_text", ""))
-        out_dir = Path(payload.get("output_dir") or "downloads").expanduser()
+        out_dir = resolve_out_dir(payload.get("output_dir"))
         retries = max(1, int(payload.get("retries") or 3))
         timeout = max(5, int(payload.get("timeout") or 30))
         token = (payload.get("token") or "").strip() or None
@@ -1038,6 +1102,9 @@ class Handler(BaseHTTPRequestHandler):
         self._send_json(update_status())
 
     def _route_status(self):
+        # 磁盘探测放锁外：首次会建目录并写临时文件，别占着状态锁做 I/O
+        default_dir = out_dir_absolute("")
+        default_ok = out_dir_writable("")
         with LOCK:
             payload = {
                 "running": STATE["running"],
@@ -1051,6 +1118,13 @@ class Handler(BaseHTTPRequestHandler):
                 "version": APP_VERSION,
                 "platform": ("windows" if os.name == "nt"
                              else "macos" if sys.platform == "darwin" else "linux"),
+                # 界面「保存目录」提示：把默认值解析成绝对路径展示，避免用户
+                # 下载完找不到文件（默认 downloads 是相对 CWD 的，不是固定位置）
+                "default_out_dir": default_dir,
+                "default_dir_writable": default_ok,
+                # 进程工作目录：前端据此把用户手填的相对路径解析成绝对路径。
+                # 双击 exe 时它等于软件安装目录，从快捷方式启动则取「起始位置」。
+                "cwd": os.getcwd(),
             }
         self._send_json(payload)
 
