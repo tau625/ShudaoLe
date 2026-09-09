@@ -70,6 +70,35 @@ winget validate "D:\01_Projects\smartedu-教材下载器\packaging\winget\manife
   `gen_manifests.py` 里的 `ARP_DISPLAY_NAME`，否则升级检测失效。
 - **升级**：`InstallerSwitches` 声明了 `/VERYSILENT`，winget 升级时静默跑安装器，
   与应用内自动更新（update.py → 静默安装）互不冲突。
-- **ManifestVersion** 固定 1.9.0；如果 winget-pkgs 审核bot 提示升级 schema，
-  改 `gen_manifests.py` 里的 `MANIFEST_VERSION` 重新生成即可。
+- **ManifestVersion** 固定 1.12.0（winget-pkgs 审核推荐版本，1.10.0 也接受；
+  如 bot 提示升级 schema，改 `gen_manifests.py` 里的 `MANIFEST_VERSION` 重新生成即可）。
 - **首次收录**会走单独的 `Add package` PR；之后每个新版本一个 `Add version` PR。
+
+## 限制与前提条件（提交前自查）
+
+- **必须支持静默安装**——winget 目录的硬性要求，没有静默模式就不能收录。
+  Inno 自带 `/SILENT` `/VERYSILENT`，本项目天然满足。
+- **不接受脚本安装器**（.bat / .ps1），只收 MSIX / MSI / APPX / EXE / 字体。本项目用 Inno exe。
+- **InstallerUrl 必须稳定、版本化、永久可达**，指向官方发布源。GitHub Release 直链满足；
+  注意别把 URL 指到会过期的构建缓存或网盘。
+- **一个 PR 只能改一个包的一个版本**，不要把多个版本/多个包塞进一个 PR。
+- 提交前先查重：`winget search shudaole`、GitHub 搜 `manifests/t/tau625`、翻一遍 open PR。
+- 首次 PR 需要签微软 CLA（PR 页面上 bot 会提示，网页里点一下即可）。
+- 提交后自动验证管线会校验：清单 schema、InstallerSha256 与 URL 文件一致、
+  恶意软件扫描；通过后还有人工审核（一般 1~7 天）。微软保留以任何理由拒绝的权利。
+- 提交前本地自测：
+  `winget validate <清单目录>`；更彻底用 winget-pkgs 的 `Tools\SandboxTest.ps1`
+  在 Windows Sandbox 里实际静默装一遍。
+
+## 同名与所有权：别人能抢注吗？
+
+- **PackageIdentifier 全局唯一、先到先得。** `tau625.ShudaoLe` 合入目录后，
+  任何人再提交相同标识符会被 bot 以「identifier already exists」直接拒绝——不存在重名包。
+- **但任何人都可以给已收录的包提交新版本 PR**（目录是社区维护的，不限作者本人）。
+  防线在审核：新版本 PR 必须给出新哈希、URL 变更会被重点审查，自动验证 + 人工审核两道关。
+- **本项目的天然优势**：标识符以 GitHub 用户名 `tau625` 开头、安装器 URL 指向
+  `tau625/ShudaoLe` 的 Release、PR 由 `tau625` 提交——三者一致，冒充几乎不可能通过审核。
+- 真出现冒名或恶意改动（如有人把 URL 换成钓鱼源）：到 microsoft/winget-pkgs 开 issue
+  举证（仓库归属 + Release 页面），微软会下架/转移标识符，官方作者申诉优先。
+- 结论：**没有实质风险，尽快提 PR 占住标识符即可**；即便万一被抢注，
+  官方作者凭仓库所有权可以申诉收回。

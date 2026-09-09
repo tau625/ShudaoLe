@@ -41,7 +41,9 @@ LICENSE_URL = f"{REPO_URL}/blob/main/LICENSE"
 # 必须与 installer.iss 的 UninstallDisplayName 完全一致（含全角括号）：
 # Inno 会把它写进 ARP 注册表 DisplayName，winget 靠它匹配已安装应用
 ARP_DISPLAY_NAME = "书到了（ShudaoLe）"
-MANIFEST_VERSION = "1.9.0"
+# winget-pkgs 审核推荐 1.12.0（1.10.0 也接受，更旧的 1.9 会被 bot 挑）
+MANIFEST_VERSION = "1.12.0"
+SCHEMA_BASE = f"https://aka.ms/winget-manifest.{{}}.{MANIFEST_VERSION}.schema.json"
 
 VERSION_RE = re.compile(r"StringStruct\(u'FileVersion',\s*u'([^']+)'\)")
 
@@ -119,14 +121,16 @@ def manifests(version: str, sha256: str) -> dict[str, str]:
     tag = f"v{version}"
     installer_url = f"{REPO_URL}/releases/download/{tag}/ShudaoLe-{version}-setup.exe"
 
-    version_yaml = f"""PackageIdentifier: {PACKAGE_ID}
+    version_yaml = f"""# yaml-language-server: $schema={SCHEMA_BASE.format("version")}
+PackageIdentifier: {PACKAGE_ID}
 PackageVersion: {version}
 DefaultLocale: en-US
 ManifestType: version
 ManifestVersion: {MANIFEST_VERSION}
 """
 
-    installer_yaml = f"""PackageIdentifier: {PACKAGE_ID}
+    installer_yaml = f"""# yaml-language-server: $schema={SCHEMA_BASE.format("installer")}
+PackageIdentifier: {PACKAGE_ID}
 PackageVersion: {version}
 InstallerType: inno
 InstallModes:
@@ -150,7 +154,8 @@ ManifestType: installer
 ManifestVersion: {MANIFEST_VERSION}
 """
 
-    locale_yaml = f"""PackageIdentifier: {PACKAGE_ID}
+    locale_yaml = f"""# yaml-language-server: $schema={SCHEMA_BASE.format("defaultLocale")}
+PackageIdentifier: {PACKAGE_ID}
 PackageVersion: {version}
 PackageLocale: en-US
 Publisher: {PUBLISHER}
