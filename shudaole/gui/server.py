@@ -298,6 +298,13 @@ def _update_worker():
             else "archive"
         set_state(phase="ready", path=path, kind=kind, error="")
         add_log(f"新版本 v{info['latest']} 更新包已下载就绪: {path}")
+        # 「一键更新」语义：下载就绪后自动进入安装，不再等用户第二次点击。
+        # 唯一例外：教材下载任务正在跑——安装器会强杀本进程，中断用户任务，
+        # 此时停在 ready，界面按钮显示「立即安装」，用户停完任务再点即可。
+        if kind == "installer" and STATE["running"]:
+            add_log("新版本已下载完成；请等当前下载任务结束后点「立即安装」")
+        else:
+            update_install()
     except Exception as e:  # 任何意外都落到可重试的 error，不影响当前版本
         set_state(phase="error", error=f"更新失败: {e}")
 

@@ -41,10 +41,15 @@ Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
 ArchitecturesInstallIn64BitMode=x64compatible
-; 未签名（个人项目暂无证书）：关闭 UAC 数字签名校验提示的强提醒，
-; 但保留 PrivilegesRequired=lowest 可装到用户目录，减少管理员弹窗
-PrivilegesRequired=lowest
-PrivilegesRequiredOverridesAllowed=dialog
+; 安装目录是 {autopf}（Program Files），必须提权才能写入。
+; 曾用 lowest（不提权）想省掉 UAC，结果静默安装（/SILENT）在 UAC 未确认时
+; 直接失败且不留任何提示——这正是「自动更新下载完了却没装上」的次因。
+; 改回 admin：UAC 通过后安装必定成功；用户取消 UAC 时 CreateProcess 直接
+; 失败（ERROR_ELEVATION_REQUIRED），update.py 能捕获并如实报错，
+; 比静默失败可诊断得多。
+PrivilegesRequired=admin
+; 静默升级时不需要「仅为我安装」对话框，只允许命令行覆盖（/CURRENTUSER）
+PrivilegesRequiredOverridesAllowed=commandline
 DisableProgramGroupPage=yes
 LicenseFile=LICENSE
 InfoBeforeFile=installer-notice.txt
@@ -65,13 +70,18 @@ Source: "dist\书到了\*"; DestDir: "{app}"; Flags: recursesubdirs createallsub
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExeName}"
 Name: "{group}\卸载 {#AppName}"; Filename: "{uninstallexe}"
+; 保持 {autodesktop}：admin 安装下它解析为公共桌面，Windows 会把公共桌面内容
+; 合并显示到用户桌面，视觉一致；若改成 {userdesktop}，Inno 会警告
+; admin 模式写 per-user 区域可能与预期不符
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
 
 [Dirs]
 Name: "{autodocs}\书到了教材"; Tasks: downloadsfolder
 
 [Run]
-Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+; 去掉 skipifsilent：自动更新是静默安装（/SILENT），带 skipifsilent 会导致
+; 装完不启动新版本，与界面「安装完成后自动打开新版本」的承诺不符。
+Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall
 
 [UninstallDelete]
 ; 程序目录内的临时文件兜底清理（历史遗留路径 catalog_cache.json 已迁移至

@@ -114,3 +114,82 @@ def test_start_windows_installer_missing_file(monkeypatch):
     ok, err = upd.start_windows_installer("C:\\nonexistent.exe")
     assert ok is False
     assert "不存在" in err
+
+
+def test_start_windows_installer_flags(monkeypatch, tmp_path):
+    """静默与强杀要保留，但不能吞错误框、不能与 [Run] 重复启动新版。"""
+    exe = tmp_path / "ShudaoLe-9.9.9-setup.exe"
+    exe.write_bytes(b"")
+    captured = {}
+
+    class _Popen:
+        def __init__(self, args, **kw):
+            captured["args"] = args
+
+    monkeypatch.setattr(upd.subprocess, "Popen", _Popen)
+    ok, err = upd.start_windows_installer(str(exe))
+    assert ok is True and err == ""
+    flags = captured["args"][1:]
+    assert "/SILENT" in flags
+    assert "/FORCECLOSEAPPLICATIONS" in flags
+    # 吞掉 Inno 错误框 -> 安装失败无痕，正是「装了没装上」最难查的一环
+    assert "/SUPPRESSMSGBOXES" not in flags
+    # 与 installer.iss [Run] 重复，会让新版本被启动两次
+    assert "/RESTARTAPPLICATIONS" not in flags
+
+
+def test_start_windows_installer_reports_uac_rejection(monkeypatch, tmp_path):
+    """UAC 取消时 CreateProcess 直接失败，必须如实报错，不能假装已启动。"""
+    exe = tmp_path / "ShudaoLe-9.9.9-setup.exe"
+    exe.write_bytes(b"")
+
+    def _boom(args, **kw):
+        raise OSError("需要提升权限")
+
+    monkeypatch.setattr(upd.subprocess, "Popen", _boom)
+    ok, err = upd.start_windows_installer(str(exe))
+    assert ok is False
+    assert "UAC" in err
+
+
+# ---------- 下载就绪后自动安装（v1.3.8 修复） ----------
+
+def _run_update_worker(monkeypatch, tmp_path, running):
+    """跑一次真实的 _update_worker，返回 update_install 被调用次数。"""
+    from shudaole import update as upd_mod
+    from shudaole.gui import server as srv
+
+    calls = {"install": 0}
+    monkeypatch.setattr(srv, "add_log", lambda *a, **k: None)
+    monkeypatch.setattr(srv, "update_install",
+                        lambda: (calls.__setitem__("install", calls["install"] + 1), (True, ""))[1])
+    monkeypatch.setattr(upd_mod, "check_latest", lambda *a, **k: {
+        "latest": "9.9.9", "zip_url": "https://github.com/tau625/ShudaoLe/x",
+        "asset_name": "ShudaoLe-9.9.9-setup.exe", "assets": []})
+    monkeypatch.setattr(upd_mod, "download_update",
+                        lambda *a, **k: (str(tmp_path / "ShudaoLe-9.9.9-setup.exe"), ""))
+    monkeypatch.setattr(upd_mod, "_checksums_for", lambda *a, **k: None)
+    monkeypatch.setattr("shudaole.config.config_dir", lambda: tmp_path)
+
+    prev = srv.STATE["running"]
+    srv.STATE["running"] = running
+    try:
+        srv._update_worker()
+    finally:
+        srv.STATE["running"] = prev
+        srv.UPDATER_STATE.update(phase="idle", error="")
+    return calls["install"], srv.UPDATER_STATE["kind"]
+
+
+def test_worker_installs_automatically_when_ready(monkeypatch, tmp_path):
+    """「一键更新」= 下载 + 安装；停在 ready 等第二次点击就是 bug。"""
+    n, kind = _run_update_worker(monkeypatch, tmp_path, running=False)
+    assert kind == "installer"
+    assert n == 1
+
+
+def test_worker_waits_when_download_task_running(monkeypatch, tmp_path):
+    """教材下载任务在跑时不能装（安装器会强杀进程中断任务），停在 ready。"""
+    n, kind = _run_update_worker(monkeypatch, tmp_path, running=True)
+    assert kind == "installer"
+    assert n == 0

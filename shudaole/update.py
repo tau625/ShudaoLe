@@ -199,21 +199,30 @@ def download_update(asset_url, asset_name, expected_sha=None, dest_dir=None,
 
 
 def start_windows_installer(installer_path):
-    """启动 Inno 安装器静默安装（进度条可见，无询问弹窗）。
+    """启动 Inno 安装器静默安装（只显示进度条，不显示向导）。
 
-    /FORCECLOSEAPPLICATIONS 让安装器自动结束正在运行的本程序（[Code] 段兜底）。
+    安装器是 PrivilegesRequired=admin，启动时必定弹 UAC：
+      - UAC 通过 -> CreateProcess 成功，安装器接管升级；
+      - UAC 取消 / 当前账户无权提权 -> CreateProcess 直接失败（ERROR_ELEVATION_REQUIRED），
+        这里会抛 OSError，必须如实报错。否则前端照常显示「安装器已启动」，
+        用户以为在装了，实际什么都没发生（v1.3.7 之前的静默失败正是这么来的）。
+
+    不传 /SUPPRESSMSGBOXES：它在静默安装出错时会连 Inno 的错误框一起吞掉，
+    故障无痕最难排查；/SILENT 本身已经足够安静（只剩进度条）。
+    不传 /RESTARTAPPLICATIONS：与 installer.iss [Run] 的启动项重复，
+    会导致新版本被启动两次。
     返回 (ok, err)。
     """
     if not os.path.isfile(installer_path):
         return False, "安装包不存在"
     try:
         subprocess.Popen([
-            installer_path, "/SILENT", "/NOCANCEL", "/SUPPRESSMSGBOXES",
-            "/FORCECLOSEAPPLICATIONS", "/RESTARTAPPLICATIONS",
+            installer_path, "/SILENT", "/NOCANCEL", "/FORCECLOSEAPPLICATIONS",
         ], close_fds=True)
         return True, ""
     except OSError as e:
-        return False, f"安装器启动失败: {e}"
+        return False, (f"安装器未能启动（UAC 未确认或账户无权安装时会这样）: {e}；"
+                       f"可到发布页手动下载安装")
 
 
 def check_latest(current_version, force=False):

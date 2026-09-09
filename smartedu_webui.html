@@ -298,7 +298,6 @@
       <label data-dim="publisher">版本 <select id="f-publisher"></select></label>
       <label data-dim="volume">册次 <select id="f-volume"></select></label>
       <label>关键词 <input id="f-kw" type="text" placeholder="书名 / 科目 / 版本，支持 册次:上册" style="width:170px"></label>
-      <label class="chk"><input id="f-res" type="checkbox"> 含课件资源</label>
     </div>
     <div id="filter-chips" class="chips" hidden></div>
     <div class="cat-result-bar">
@@ -831,7 +830,6 @@
     Object.keys(f).forEach(k => params.set(k, f[k]));
     const kw = $('#f-kw').value.trim();
     if (kw) params.set('keyword', kw);
-    if ($('#f-res').checked) params.set('include_resources', '1');
     return params;
   }
 
@@ -973,7 +971,6 @@
   document.querySelectorAll('select[id^="f-"]').forEach(el => {
     el.onchange = () => reload();
   });
-  $('#f-res').onchange = () => reload();
   let kwTimer = null;
   $('#f-kw').oninput = () => {
     clearTimeout(kwTimer);
@@ -1183,7 +1180,7 @@
     bar.innerHTML = '<span>发现新版本 v' + info.latest + size +
       '，建议更新以获得最新修复。</span>';
     var btnView = document.createElement('button');
-    btnView.textContent = '查看新版';
+    btnView.textContent = '查看新版发布页';
     btnView.style.cssText = 'padding:3px 10px;border:1px solid #2e6da4;' +
       'border-radius:4px;background:#2e6da4;color:#fff;cursor:pointer';
     btnView.onclick = function () {
@@ -1196,12 +1193,12 @@
     bar.appendChild(btnView);
     if (info.zip_url) {
       var btnDl = document.createElement('button');
-      btnDl.textContent = '一键下载';
+      btnDl.textContent = '手动更新';
       btnDl.style.cssText = 'padding:3px 10px;border:1px solid #1d4f76;' +
         'border-radius:4px;background:#fff;color:#1d4f76;cursor:pointer';
       btnDl.onclick = function () {
         btnDl.disabled = true;
-        btnDl.textContent = '正在打开下载页...';
+        btnDl.textContent = '正在打开下载...';
         // 经浏览器打开下载链接（让浏览器接管下载进度与保存位置，服务端零压力）
         fetch('/api/open', {
           method: 'POST',
@@ -1209,10 +1206,10 @@
           body: JSON.stringify({ target: info.zip_url, mode: 'url' })
         }).then(function (r) {
           if (!r.ok) throw new Error('open-failed');
-          btnDl.textContent = '已请求浏览器下载';
+          btnDl.textContent = '已在浏览器开始下载';
         }).catch(function () {
           window.open(info.zip_url, '_blank');
-          btnDl.textContent = '已打开下载页';
+          btnDl.textContent = '已打开下载链接';
         });
       };
       bar.appendChild(btnDl);
@@ -1263,6 +1260,11 @@
   }
 
   function startDownload(btn) {
+    // 「一键更新」= 下载 + 安装一次到位，所以只在点击时确认一次，中间不再打断
+    var tip = PLATFORM === 'windows'
+      ? '将下载新版本安装包并自动安装，安装时书到了会退出、由安装器完成升级。继续吗？'
+      : '将下载新版本更新包，完成后自动打开所在目录（需手动替换）。继续吗？';
+    if (!window.confirm(tip)) return;
     fetch('/api/update/download', { method: 'POST' })
       .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
       .then(function (res) {
@@ -1331,7 +1333,7 @@
     if (bar.querySelector('.js-auto-update')) return;
     var btn = document.createElement('button');
     btn.className = 'js-auto-update';
-    btn.textContent = '自动更新';
+    btn.textContent = '一键更新';
     btn.style.cssText = btnStyle();
     btn.onclick = function () { startDownload(btn); };
     bar.appendChild(btn);
@@ -1344,7 +1346,7 @@
       }).catch(function () {});
   }
 
-  // 旧版横幅出现时，往里补一个「自动更新」按钮
+  // 旧版横幅出现时，往里补一个「一键更新」按钮
   var mo = new MutationObserver(function () {
     var bar = document.getElementById('update-banner');
     if (bar && !bar.querySelector('.js-auto-update')) addAutoUpdateButton(bar);
@@ -1365,7 +1367,7 @@
     bar.innerHTML = '<span>发现新版本 v' + info.latest + size +
       '，建议更新以获得最新修复。</span>';
     var btnView = document.createElement('button');
-    btnView.textContent = '查看新版';
+    btnView.textContent = '查看新版发布页';
     btnView.style.cssText = 'padding:3px 10px;border:1px solid #2e6da4;' +
       'border-radius:4px;background:#2e6da4;color:#fff;cursor:pointer';
     btnView.onclick = function () {
@@ -1388,7 +1390,7 @@
     bar.appendChild(btnClose);
   }
 
-  // 检查更新结果弹窗：明确告知是否最新；发现新版时提供「立即下载更新」与
+  // 检查更新结果弹窗：明确告知是否最新；发现新版时提供「一键更新」「手动更新」与
   // 「查看发布页」入口。latest 为 /api/update-check 的 latest 对象（null=已最新）。
   function showUpdateModal(latest) {
     var old = document.getElementById('update-modal');
@@ -1426,7 +1428,7 @@
     btnClose.onclick = function () { overlay.remove(); };
     row.appendChild(btnClose);
     if (latest) {
-      var btnView = mkBtn('查看发布页');
+      var btnView = mkBtn('查看新版发布页');
       btnView.onclick = function () {
         fetch('/api/open', { method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ target: latest.html_url, mode: 'url' }) })
@@ -1434,7 +1436,20 @@
         overlay.remove();
       };
       row.insertBefore(btnView, btnClose);
-      var btnDl = mkBtn('立即下载更新', true);
+      // 手动更新：交给浏览器下载更新包，用户自己决定何时安装（程序内不干预）
+      if (latest.zip_url) {
+        var btnManual = mkBtn('手动更新');
+        btnManual.title = '用浏览器下载更新包，自行决定安装时机';
+        btnManual.onclick = function () {
+          fetch('/api/open', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ target: latest.zip_url, mode: 'url' }) })
+            .then(function (r) { if (!r.ok) throw new Error('open-failed'); })
+            .catch(function () { window.open(latest.zip_url, '_blank'); });
+          overlay.remove();
+        };
+        row.insertBefore(btnManual, btnView);
+      }
+      var btnDl = mkBtn('一键更新', true);
       btnDl.onclick = function () {
         startDownload(btnDl);
         pollStatus(function (s) { paintButton(btnDl, s); });
