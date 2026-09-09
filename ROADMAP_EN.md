@@ -90,10 +90,22 @@ Goal: turn "three big single files + zero tests + zero gates" into a sustainable
 
 ### Batch 3: integration & updates
 
-- [ ] **P2-5 In-app update check**
-  Asynchronously query `https://api.github.com/repos/tau625/ShudaoLe/releases/latest` after startup (version number only — no telemetry, no PII, honors system proxy); show a top banner linking to the Release page when a newer version exists.
-  **No auto-download/auto-update**: silently replacing an unsigned exe is a double minefield (AV false positives + legal risk). Default is a manual "check for updates" button; network checks can be disabled in settings.
-  *Why*: users are scattered; without an update channel, security fixes never reach them. *Outcome*: version fragmentation converges; P0-grade fixes reach users.
+- [ ] **P2-5 In-app update check + one-click download (dual-channel, optional CN mirror)** 【decision locked】
+  Asynchronously query the latest version after startup (version number only — no telemetry, no PII, honors the system proxy):
+  - **Version source**: `https://api.github.com/repos/tau625/ShudaoLe/releases/latest`; auto-fallback to a mirror prefix when the direct GitHub connection is unreliable (mirror URL configurable in settings)
+  - **Newer version → top banner** with two actions:
+    - "View release": opens the Release page (the zero-risk baseline)
+    - "One-click download": fetches `ShudaoLe-X.Y.Z-windows-x64.zip` to the local Downloads folder — official GitHub link by default, with an optional ghproxy-style mirror prefix for mainland-China acceleration; on completion, **prompt the user to extract and replace manually** (no auto-replacement)
+  - **No silent auto-update**: a self-replacing unsigned exe is a double minefield (AV false positives + legal risk for a legally-sensitive tool). Default is a manual "check for updates" button; network checks can be fully disabled in settings.
+  *Why*: without an update channel, security fixes never reach scattered users; mainland users often can't reach GitHub directly, so the mirror channel decides whether this feature is usable at all. *Outcome*: version fragmentation converges; P0-grade fixes reach users.
+
+- [ ] **P2-6 Windows installer (Inno Setup)** 【decision locked】
+  GitHub Actions windows-latest runners ship with Inno Setup 6; CI adds an `ISCC.exe installer.iss` step after zipping, producing `ShudaoLe-X.Y.Z-setup.exe` attached to the Release. The installer provides Start-menu/desktop shortcuts, a standard uninstaller, and a registered default download directory.
+  **The portable zip stays alongside** — many teachers prefer the no-install version; both channels ship.
+  *Why*: "extract a zip and double-click" doesn't look like real software to ordinary teachers, and an app with no uninstaller is more readily flagged by security software; setup.exe markedly lowers the adoption barrier. *Outcome*: distribution polish on par with commercial software; a winget community manifest can follow (`winget install` to install/upgrade — Microsoft's "real software" channel for free).
+
+> **Code signing: decided — not purchasing for now** (Windows OV ≈ ¥500-900/yr, EV ≈ ¥2500+/yr, macOS $99/yr).
+> The README's AV-whitelisting guidance stays; if false-positive reports cluster in the future, revisit Windows OV first.
 
 ---
 
@@ -120,7 +132,7 @@ Goal: turn "three big single files + zero tests + zero gates" into a sustainable
 | Batch 0 | P0-1 ~ P0-5 (ship as v1.2.1 patch) | none |
 | Batch 1 | P1 engineering foundation (split/logging/tests/CI) | after the P0 release |
 | Batch 2 | P2-1/2/3/4 (download core + config externalization + scripting) | P1 done |
-| Batch 3 | P2-5 update check | P1 done (can partly parallel Batch 2) |
+| Batch 3 | P2-5 update check + one-click download, P2-6 Windows installer | P1 done (can partly parallel Batch 2) |
 | Batch 4 | all of P3 | no hard dependency; interleaved |
 
 ## Risk register
@@ -128,4 +140,5 @@ Goal: turn "three big single files + zero tests + zero gates" into a sustainable
 - **Split vs. PyInstaller collection**: dynamic imports may be missed → triple insurance: thin shims + explicit hiddenimports + CI smoke build.
 - **Python 3.8 baseline**: keep the promise (uniform `from __future__ import annotations`); only revisit if a required dependency drops 3.8 — and then announce prominently in Release notes.
 - **Update-check compliance**: this tool is legally sensitive (PolyForm Noncommercial + textbook copyright). Public GitHub API only, zero user data transmitted, manual by default, fully disableable; never bundle an auto-updater.
+- **Mainland-mirror dependency**: if the update-download mirror prefix points to a third-party public accelerator (ghproxy-style), it may go stale or be polluted — official links stay the default; mirrors are an explicit user opt-in, and the actual source is shown in the download prompt.
 - **Concurrency vs. platform rate limits**: concurrency capped at 5 with a "use in moderation" note in the docs; on a platform-side 429, throttle automatically and notify.
