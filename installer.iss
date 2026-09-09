@@ -25,6 +25,8 @@ DefaultDirName={autopf}\{#AppNameEn}
 DefaultGroupName={#AppName}
 UninstallDisplayName={#AppName}（{#AppNameEn}）
 OutputBaseFilename=ShudaoLe-{#Version}-setup
+; 产物输出到脚本所在目录（Inno 默认 Output\ 子目录，CI 校验与上传均按仓库根目录找）
+OutputDir=.
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
