@@ -1,5 +1,7 @@
 # 书到了 · 教材下载
 
+[简体中文](README.md) | [English](README_EN.md)
+
 > **本仓库不包含任何教材文件，仅提供下载工具。**
 
 > **ShudaoLe (Book Arrived)** — one-click official textbook downloader for China's Smart Education platform.
