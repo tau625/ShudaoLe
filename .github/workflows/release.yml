@@ -45,6 +45,15 @@ jobs:
           $version = $env:GITHUB_REF_NAME -replace '^v', ''
           Compress-Archive -Path 'dist\书到了\*' -DestinationPath "ShudaoLe-${version}-windows-x64.zip" -Force
 
+      - name: Build installer (windows, Inno Setup)
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: |
+          # windows-latest runner 自带 Inno Setup 6（ISCC 在 PATH）
+          $version = $env:GITHUB_REF_NAME -replace '^v', ''
+          & ISCC.exe "/DVersion=${version}" installer.iss
+          if (-not (Test-Path "ShudaoLe-${version}-setup.exe")) { throw "installer build failed" }
+
       - name: Package (linux)
         if: matrix.platform == 'linux'
         shell: bash

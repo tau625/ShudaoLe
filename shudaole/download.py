@@ -475,3 +475,93 @@ def process_one(entry, out_dir, auth, retries, timeout,
         return _result(entry, title, "fail", f"文件写入失败: {e}")
 
 
+
+
+# ---------- 并发下载编排（P2-1） ----------
+def download_many(entries, out_dir, auth, retries=3, timeout=30,
+                  workers=3, flat_name=False, on_log=None,
+                  on_item_start=None, on_item_done=None,
+                  on_progress=None, cancel_event=None):
+    """并发处理多条下载（worker 线程池），返回与 entries 等长的结果列表。
+
+    设计约束：
+      - 默认 workers=3（上限 5）：对教材平台友好，避免触发限流
+      - cancel_event（threading.Event）：worker 在两个位置响应取消——
+        取任务前 与 下载进度回调内；进行中的文件优雅收尾（保留 .part 供续传）
+      - on_item_start(index)/on_item_done(result)/on_progress(item_index, done, total)
+        供 GUI 就地更新条目状态；回调异常不会打断下载
+      - 结果顺序与输入一致（index 对齐），统计口径与串行版相同
+    """
+    import threading
+    from concurrent.futures import ThreadPoolExecutor
+
+    workers = max(1, min(5, int(workers)))
+    cancel_event = cancel_event or threading.Event()
+    results = [None] * len(entries)
+    lock = threading.Lock()
+
+    def _log(msg):
+        try:
+            (on_log or _default_log)(msg)
+        except Exception:
+            pass
+
+    def _safe(fn, *args):
+        try:
+            if fn is not None:
+                fn(*args)
+        except Exception:
+            pass
+
+    def worker(idx_entry):
+        idx, entry = idx_entry
+        if cancel_event.is_set():
+            results[idx] = _result(entry, None, "fail", "已取消")
+            return
+        _safe(on_item_start, idx)
+        item = {"index": idx + 1, "entry": entry, "title": None,
+                "status": "pending", "downloaded": 0, "total": 0,
+                "msg": "", "file": ""}
+
+        def _prog(done, total):
+            if cancel_event.is_set():
+                raise CancelledError("用户取消")
+            item["status"] = "downloading"
+            item["downloaded"] = done
+            item["total"] = total
+            _safe(on_progress, idx, done, total)
+
+        try:
+            res = process_one(entry, out_dir, auth, retries, timeout,
+                              on_log=None, on_progress=_prog, item=item,
+                              flat_name=flat_name)
+        except CancelledError:
+            res = _result(entry, item.get("title"), "fail", "已取消")
+        except Exception as e:  # 未预料异常不拖垮整个池
+            res = _result(entry, item.get("title"), "fail",
+                          f"未预料异常: {type(e).__name__}: {e}")
+        # ok/skip 时提取落盘路径供界面跳转
+        if res["status"] == "ok":
+            item["file"] = res.get("msg") or ""
+        elif res["status"] == "skip":
+            item["file"] = _extract_path_from_msg(res.get("msg") or "")
+        item["status"] = res["status"]
+        item["msg"] = res["msg"]
+        if res.get("title"):
+            item["title"] = res["title"]
+        with lock:
+            results[idx] = res
+        _safe(on_item_done, idx, item)
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        list(pool.map(worker, enumerate(entries)))
+
+    return results
+
+
+def _extract_path_from_msg(msg):
+    """从 skip 提示（"文件已存在，跳过: <路径>"）中提取路径。"""
+    marker = "跳过: "
+    if marker in msg:
+        return msg.split(marker, 1)[1].strip()
+    return ""

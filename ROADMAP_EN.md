@@ -68,21 +68,21 @@ Goal: turn "three big single files + zero tests + zero gates" into a sustainable
 
 ### Batch 2: download core
 
-- [ ] **P2-1 Concurrent downloads (worker pool, 3-5)**
+- [x] **P2-1 Concurrent downloads (worker pool, 3-5)**
   Implemented in the downloader core (`download_many`); the GUI's `run_task` only orchestrates. Default concurrency 3, adjustable up to 5 — friendly to the textbook platform, avoiding rate limits.
   Cancel upgrades from a bool flag to a `threading.Event`: workers check between files; an in-flight file winds down gracefully (close the stream, keep the .part).
   *Why*: downloads are strictly sequential today; batch-downloading a whole grade set is the biggest speed pain. *Outcome*: 3-5× speedup in batch scenarios (bounded by platform bandwidth/rate limits).
 
-- [ ] **P2-2 Resumable downloads + task persistence**
+- [x] **P2-2 Resumable downloads + task persistence**
   Downloads write to `xxx.pdf.part` first, renamed on completion; on restart, a `.part`'s size seeds a `Range` request (fall back to a full re-download if the server rejects 206).
   Persist the task list to `~/.config/shudaole/tasks.json` (links, target dir, status, byte counts, timestamps); on startup the GUI detects unfinished tasks and offers "resume / discard".
   *Why*: task state is memory-only today — close the window and everything is lost; a 90%-downloaded PDF lost to a network blip restarts from zero. *Outcome*: a qualitative reliability jump; the UI can be closed and reopened freely.
 
-- [ ] **P2-3 Catalog extension (publisher config externalized)**
+- [x] **P2-3 Catalog extension (publisher config externalized)**
   Externalize `PUB_GROUPS` / `SUPPORTED_SCOPE`: in-package `data/pubs.json` as defaults, user-level `~/.config/shudaole/pubs.json` deep-merged over them; add a "manage publishers" panel in the web UI (add/remove groups and labels, writes the user file).
   *Why*: adding the BSD publisher today requires source edits and a restart — impossible for ordinary users. *Outcome*: any publisher/phase opens up without touching code.
 
-- [ ] **P2-4 Scripting capabilities**
+- [x] **P2-4 Scripting capabilities**
   - Book-list export: filter results to CSV / Markdown (all dimension fields, for printing or sharing)
   - CLI batch mode: enhanced `--list-file` semantics + `--dry-run` + normalized exit codes (for external scripts)
   - Scheduled sync: a `--watch` mode (polls catalog updates, auto-enqueues new textbooks, configurable interval)
@@ -90,7 +90,7 @@ Goal: turn "three big single files + zero tests + zero gates" into a sustainable
 
 ### Batch 3: integration & updates
 
-- [ ] **P2-5 In-app update check + one-click download (dual-channel, optional CN mirror)** 【decision locked】
+- [x] **P2-5 In-app update check + one-click download (dual-channel, optional CN mirror)** 【decision locked】
   Asynchronously query the latest version after startup (version number only — no telemetry, no PII, honors the system proxy):
   - **Version source**: `https://api.github.com/repos/tau625/ShudaoLe/releases/latest`; auto-fallback to a mirror prefix when the direct GitHub connection is unreliable (mirror URL configurable in settings)
   - **Newer version → top banner** with two actions:
@@ -99,7 +99,7 @@ Goal: turn "three big single files + zero tests + zero gates" into a sustainable
   - **No silent auto-update**: a self-replacing unsigned exe is a double minefield (AV false positives + legal risk for a legally-sensitive tool). Default is a manual "check for updates" button; network checks can be fully disabled in settings.
   *Why*: without an update channel, security fixes never reach scattered users; mainland users often can't reach GitHub directly, so the mirror channel decides whether this feature is usable at all. *Outcome*: version fragmentation converges; P0-grade fixes reach users.
 
-- [ ] **P2-6 Windows installer (Inno Setup)** 【decision locked】
+- [x] **P2-6 Windows installer (Inno Setup)** 【decision locked】
   GitHub Actions windows-latest runners ship with Inno Setup 6; CI adds an `ISCC.exe installer.iss` step after zipping, producing `ShudaoLe-X.Y.Z-setup.exe` attached to the Release. The installer provides Start-menu/desktop shortcuts, a standard uninstaller, and a registered default download directory.
   **The portable zip stays alongside** — many teachers prefer the no-install version; both channels ship.
   *Why*: "extract a zip and double-click" doesn't look like real software to ordinary teachers, and an app with no uninstaller is more readily flagged by security software; setup.exe markedly lowers the adoption barrier. *Outcome*: distribution polish on par with commercial software; a winget community manifest can follow (`winget install` to install/upgrade — Microsoft's "real software" channel for free).

@@ -35,13 +35,12 @@ from urllib.parse import parse_qs, urlsplit
 
 # 包内相对导入：核心逻辑已拆入 shudaole 包（P1-1），根目录脚本保留为 thin shim
 from ..config import TOKEN_FILE, path_is_relative_to  # noqa: E402
-from ..errors import CancelledError  # noqa: E402
 from ..catalog import (  # noqa: E402
     DIM_LABELS, FILTER_DIMS, ENABLED_DIMS, catalog_facets, fetch_catalog_index,
     search_catalog, publisher_facets, relax_suggestions,
     SUPPORTED_SCOPE, DEFAULT_FILTERS,
 )
-from ..download import AuthContext, initial_token, process_one  # noqa: E402
+from ..download import (AuthContext, initial_token, download_many)
 from ..logutil import attach_callback  # noqa: E402
 from .. import token as auto_fetch_token  # noqa: E402  一键令牌抓取（进程内调用，随 exe 打包零依赖）
 
@@ -456,55 +455,85 @@ def run_task(payload):
     if auth.token:
         add_log("已加载登录令牌（页面填写 / 环境变量 / token.txt）")
 
-    def make_progress(item):
-        def _cb(done, total):
-            if STATE["cancel"]:
-                raise CancelledError("用户取消")
-            with LOCK:
-                item["status"] = "downloading"
-                item["downloaded"] = done
-                item["total"] = total
-        return _cb
+    # P2-1：并发下载。worker 池在 download_many 内部，取消走 Event（文件间隙 +
+    # 进度回调两处响应），进行中的文件保留 .part 供续传。并发度可由界面传入。
+    import threading as _threading
+    cancel_event = _threading.Event()
+    STATE["_cancel_event"] = cancel_event
+    workers = max(1, min(5, int(payload.get("workers") or 3)))
 
-    for item in items:
-        if STATE["cancel"]:
-            with LOCK:
-                item["status"] = "fail"
-                item["msg"] = "已取消"
-            continue
-
+    def _on_start(idx):
+        item = items[idx]
         add_log(f"[{item['index']}/{len(items)}] {preview(item['entry'])}")
         with LOCK:
             item["status"] = "parsing"
-        try:
-            res = process_one(item["entry"], out_dir, auth, retries, timeout,
-                              on_log=add_log, on_progress=make_progress(item),
-                              item=item, flat_name=flat_name)
+
+    def _on_done(idx, final_item):
+        item = items[idx]
+        with LOCK:
+            item["status"] = final_item["status"]
+            item["msg"] = final_item["msg"]
+            if final_item.get("title"):
+                item["title"] = final_item["title"]
+            item["file"] = final_item.get("file") or ""
+
+    def _on_progress(idx, done, total):
+        item = items[idx]
+        with LOCK:
+            item["status"] = "downloading"
+            item["downloaded"] = done
+            item["total"] = total
+
+    # 取消按钮 -> Event（进度回调内抛 CancelledError 让 worker 优雅收尾）
+    def _watch_cancel():
+        while STATE["running"]:
+            if STATE["cancel"]:
+                cancel_event.set()
+                return
+            cancel_event.wait(0.3)
+
+    import threading as _th
+    _th.Thread(target=_watch_cancel, daemon=True).start()
+
+    # P2-2：会话持久化——周期落盘（后台守护线程），崩溃/关界面后可恢复
+    from .. import tasks as tasks_store
+    _stop_save = _th.Event()
+
+    def _periodic_save():
+        while not _stop_save.wait(2.0):
             with LOCK:
-                item["status"] = res["status"]
-                item["msg"] = res["msg"]
-                if res.get("title"):
-                    item["title"] = res["title"]
-                # 记录下载文件路径：ok 时 msg 即完整路径；skip 时从提示中提取路径
-                if res["status"] == "ok":
-                    item["file"] = res.get("msg") or ""
-                elif res["status"] == "skip":
-                    item["file"] = _extract_path(res.get("msg") or "")
-        except CancelledError:
-            with LOCK:
-                item["status"] = "fail"
-                item["msg"] = "已取消"
-            add_log("已取消当前下载")
-        except Exception as e:  # 兜底：未预料异常不中断批量任务
-            with LOCK:
-                item["status"] = "fail"
-                item["msg"] = f"未预料异常: {type(e).__name__}: {e}"
-            add_log(f"未预料异常: {type(e).__name__}: {e}")
+                snapshot = {
+                    "entries": entries, "out_dir": str(out_dir),
+                    "workers": workers, "flat_name": flat_name,
+                    "items": [dict(x) for x in items],
+                }
+            tasks_store.save_session(snapshot)
+
+    _th.Thread(target=_periodic_save, daemon=True).start()
+
+    download_many(
+        entries, out_dir, auth, retries=retries, timeout=timeout,
+        workers=workers, flat_name=flat_name, on_log=None,
+        on_item_start=_on_start, on_item_done=_on_done,
+        on_progress=_on_progress, cancel_event=cancel_event,
+    )
+    _stop_save.set()
 
     ok = sum(1 for x in items if x["status"] == "ok")
     skip = sum(1 for x in items if x["status"] == "skip")
     fail = sum(1 for x in items if x["status"] == "fail")
     canceled = STATE["cancel"]
+    # 全部到达终态即视为完成，清除持久化；有未完成条目（取消/崩溃）保留供恢复
+    unfinished = [x for x in items if x["status"] not in ("ok", "skip", "fail")]
+    if not unfinished:
+        tasks_store.clear_session()
+    else:
+        with LOCK:
+            tasks_store.save_session({
+                "entries": entries, "out_dir": str(out_dir),
+                "workers": workers, "flat_name": flat_name,
+                "items": [dict(x) for x in items],
+            })
     with LOCK:
         STATE["running"] = False
         STATE["cancel"] = False  # 重置取消标志，避免界面按钮卡在"正在停止..."
@@ -617,6 +646,32 @@ class Handler(BaseHTTPRequestHandler):
                 self._send_json({"error": f"教材目录获取失败: {e}"}, 502)
         elif path == "/api/auto-token/status":
             self._send_json(auto_token_status())
+        elif path == "/api/pending-session":
+            # P2-2：启动时查询上次未完成的任务会话（继续/放弃）
+            try:
+                from .. import tasks as tasks_store
+                sess = tasks_store.load_session()
+                if sess and tasks_store.has_unfinished(sess):
+                    self._send_json({
+                        "pending": True,
+                        "out_dir": sess.get("out_dir", ""),
+                        "entries": sess.get("entries", []),
+                        "counts": {
+                            "ok": sum(1 for x in sess.get("items") or []
+                                      if x.get("status") == "ok"),
+                            "total": len(sess.get("entries") or []),
+                        },
+                        "saved_at": sess.get("saved_at", 0),
+                    })
+                else:
+                    self._send_json({"pending": False})
+            except Exception:
+                self._send_json({"pending": False})
+        elif path == "/api/update-check":
+            # P2-5：查询最新版本（无遥测；失败/无新版返回 latest:null）
+            from .. import update as upd
+            res = upd.check_latest(APP_VERSION, force=True)
+            self._send_json({"latest": res} if res else {"latest": None})
         elif path == "/api/status":
             with LOCK:
                 payload = {
@@ -736,6 +791,14 @@ class Handler(BaseHTTPRequestHandler):
             if stopping:
                 add_log("收到停止请求，将在当前下载点中断...")
             self._send_json({"ok": True, "stopping": stopping})
+        elif path == "/api/discard-session":
+            # P2-2：放弃恢复上次会话（保留已下载文件，只清持久化记录）
+            try:
+                from .. import tasks as tasks_store
+                tasks_store.clear_session()
+                self._send_json({"ok": True})
+            except Exception as e:
+                self._send_json({"error": str(e)}, 500)
         else:
             self._send_json({"error": "not found"}, 404)
 
@@ -796,6 +859,8 @@ def _notify(title, msg):
 
 def main():
     attach_callback(add_log)  # P1-3：shudaole.* 日志同源进界面缓冲
+    from .. import pubs as _pubs; from .. import catalog as _catalog_mod
+    _pubs.apply_user_pubs(_catalog_mod)  # P2-3：用户级出版社配置合并
     parser = argparse.ArgumentParser(
         description="书到了（ShudaoLe）· 国家中小学智慧教育平台教材 PDF 下载 - 网页界面")
     parser.add_argument("--port", type=int, default=DEFAULT_PORT,

@@ -116,6 +116,27 @@ def print_facets(items, filters=None, keyword=None):
 
 
 
+def _export_matches(matches, path):
+    """P2-4：把筛选结果导出为 CSV 或 Markdown（按扩展名区分）。"""
+    import csv
+    fields = ["title", "phase", "grade", "subject", "publisher", "volume",
+              "id", "kind"]
+    p = Path(path)
+    if p.suffix.lower() == ".csv":
+        with p.open("w", encoding="utf-8-sig", newline="") as f:  # BOM 便于 Excel
+            w = csv.writer(f)
+            w.writerow(fields)
+            for m in matches:
+                w.writerow([m.get(k) or "" for k in fields])
+    else:  # 默认 Markdown
+        with p.open("w", encoding="utf-8") as f:
+            f.write("| " + " | ".join(fields) + " |\n")
+            f.write("|" + "---|" * len(fields) + "\n")
+            for m in matches:
+                f.write("| " + " | ".join(str(m.get(k) or "") for k in fields) + " |\n")
+    print(f"已导出 {len(matches)} 条到 {p}")
+
+
 def run_catalog_search(args):
     """--search/--phase/--grade/--subject/--publisher 触发的目录搜索模式。"""
     print("正在加载教材目录（首次约 40MB，之后 7 天内走本地缓存）...")
@@ -140,9 +161,14 @@ def run_catalog_search(args):
     print(f"\n共匹配 {len(matches)} 本教材：\n")
     print_catalog_matches(matches)
 
+    # P2-4：导出书单（与下载互斥，导出后退出）
+    if getattr(args, "export", None):
+        _export_matches(matches, args.export)
+        return 0
+
     if args.list_only:
         return 0
-    if args.all:
+    if args.all or getattr(args, "dry_run", False):
         picked = matches
     elif sys.stdin and sys.stdin.isatty():
         try:
@@ -166,6 +192,13 @@ def run_catalog_search(args):
         return 0
 
     ordered = [detail_page_url(m["id"]) for m in picked]
+    if getattr(args, "dry_run", False):
+        # P2-4：干跑——只列出将要下载的清单与目标目录，不发起任何下载请求
+        print(f"\n[dry-run] 将下载 {len(ordered)} 本到 {args.output}:")
+        for i, m in enumerate(picked, 1):
+            print(f"  {i}. {m.get('title') or m['id']}")
+        print("[dry-run] 未发起任何网络下载。")
+        return 0
     print(f"\n已选择 {len(ordered)} 本，开始下载...")
     return run_downloads(ordered, args)
 
@@ -242,6 +275,10 @@ def build_arg_parser():
                         help="下载搜索命中的全部教材（默认交互选择编号）")
     parser.add_argument("--list-only", action="store_true",
                         help="仅列出搜索结果，不进入下载")
+    parser.add_argument("--export", metavar="文件",
+                        help="导出筛选结果为 CSV/Markdown（.csv 或 .md；导出后退出）")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="干跑：列出将要下载的清单，不发起下载（供脚本预检）")
     parser.add_argument("--show-facets", action="store_true",
                         help="级联查看：打印当前条件下各维度可选值与命中数")
     parser.add_argument("--include-resources", action="store_true",
@@ -307,6 +344,9 @@ def run_downloads(ordered, args):
 
 def main(argv=None):
     attach_console()  # P1-3：logging 输出走裸格式控制台，与旧版 print 一致
+    from . import pubs as _pubs
+    _pubs.apply_user_pubs(__import__('shudaole.catalog',
+                             fromlist=['PUB_GROUPS']))  # P2-3
     parser = build_arg_parser()
     args = parser.parse_args(argv)
 

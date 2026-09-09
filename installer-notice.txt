@@ -1,0 +1,16 @@
+欢迎使用「书到了」（ShudaoLe）
+
+安装前请知悉：
+
+1. 本工具用于从国家中小学智慧教育平台（smartedu.cn）下载中小学教材 PDF，
+   仅供个人学习、研究、教学备课使用；教材版权归平台与相应出版机构所有，
+   请勿用于商业用途或二次分发。
+
+2. 下载部分教材 PDF 需要登录平台账号（工具内提供一键登录获取令牌）。
+
+3. 本程序未做代码签名（个人开源项目，PolyForm Noncommercial 许可），
+   Windows Defender 或其他安全软件可能误报；如遇提示请选择「信任/允许」
+   或到 https://github.com/tau625/ShudaoLe 核实源码后自行判断。
+
+4. 绿色免安装版（zip）与本项目主页：
+   https://github.com/tau625/ShudaoLe/releases

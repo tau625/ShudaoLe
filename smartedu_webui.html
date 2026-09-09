@@ -276,7 +276,7 @@
     </div>
     <div class="top-meta">
       <!-- 发版时与 version_info.txt 的 FileVersion 同步修改（此处仅为加载前的兜底显示） -->
-      <span class="ver" id="app-ver">v1.2.1</span>
+      <span class="ver" id="app-ver">v1.3.0</span>
       <a href="https://github.com/tau625/ShudaoLe" target="_blank" rel="noopener">GitHub 项目页</a>
     </div>
   </header>
@@ -1073,6 +1073,115 @@
       }
     })
     .catch(function () { /* 网络异常时保留静态兜底值 */ });
+})();
+
+// ---- P2-2 会话恢复横幅（纯追加，不改动上方任何逻辑）----
+(function () {
+  fetch('/api/pending-session')
+    .then(function (r) { return r.json(); })
+    .then(function (d) {
+      if (!d || !d.pending) return;
+      var bar = document.createElement('div');
+      bar.id = 'resume-banner';
+      bar.style.cssText = 'margin:8px 0;padding:8px 12px;border:1px solid #b23a2e;' +
+        'border-radius:6px;background:#fdf6f0;color:#7a2d24;font-size:13px;' +
+        'display:flex;gap:10px;align-items:center;flex-wrap:wrap';
+      var done = (d.counts && d.counts.ok) || 0;
+      var total = (d.counts && d.counts.total) || 0;
+      bar.innerHTML =
+        '<span>检测到上次未完成的下载任务（已完成 ' + done + '/' + total +
+        '），链接已找回，可粘贴到输入框继续（已下载的会自动跳过）。</span>';
+      var btnKeep = document.createElement('button');
+      btnKeep.textContent = '找回链接';
+      btnKeep.style.cssText = 'padding:3px 10px;border:1px solid #b23a2e;' +
+        'border-radius:4px;background:#b23a2e;color:#fff;cursor:pointer';
+      btnKeep.onclick = function () {
+        var box = document.getElementById('links');
+        if (box) {
+          box.value = (d.entries || []).join('\n');
+          bar.remove();
+        }
+      };
+      var btnDrop = document.createElement('button');
+      btnDrop.textContent = '不再提示';
+      btnDrop.style.cssText = 'padding:3px 10px;border:1px solid #ccc;' +
+        'border-radius:4px;background:#fff;color:#666;cursor:pointer';
+      btnDrop.onclick = function () {
+        fetch('/api/discard-session', { method: 'POST' })
+          .then(function () { bar.remove(); })
+          .catch(function () { bar.remove(); });
+      };
+      bar.appendChild(btnKeep);
+      bar.appendChild(btnDrop);
+      var mount = document.body;
+      mount.insertBefore(bar, mount.firstChild);
+    })
+    .catch(function () { /* 查询失败静默 */ });
+})();
+// ---- P2-5 更新检查横幅（纯追加，不改动上方任何逻辑）----
+(function () {
+  function showUpdateBanner(info) {
+    var bar = document.createElement('div');
+    bar.id = 'update-banner';
+    bar.style.cssText = 'margin:8px 0;padding:8px 12px;border:1px solid #2e6da4;' +
+      'border-radius:6px;background:#eef4fa;color:#1d4f76;font-size:13px;' +
+      'display:flex;gap:10px;align-items:center;flex-wrap:wrap';
+    var size = info.asset_size ? '（约 ' + (info.asset_size / 1048576).toFixed(1) + ' MB）' : '';
+    bar.innerHTML = '<span>发现新版本 v' + info.latest + size +
+      '，建议更新以获得最新修复。</span>';
+    var btnView = document.createElement('button');
+    btnView.textContent = '查看新版';
+    btnView.style.cssText = 'padding:3px 10px;border:1px solid #2e6da4;' +
+      'border-radius:4px;background:#2e6da4;color:#fff;cursor:pointer';
+    btnView.onclick = function () {
+      fetch('/api/open', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target: info.html_url, mode: 'url' })
+      }).catch(function () { window.open(info.html_url, '_blank'); });
+    };
+    bar.appendChild(btnView);
+    if (info.zip_url) {
+      var btnDl = document.createElement('button');
+      btnDl.textContent = '一键下载';
+      btnDl.style.cssText = 'padding:3px 10px;border:1px solid #1d4f76;' +
+        'border-radius:4px;background:#fff;color:#1d4f76;cursor:pointer';
+      btnDl.onclick = function () {
+        btnDl.disabled = true;
+        btnDl.textContent = '正在打开下载页...';
+        // 经浏览器打开下载链接（让浏览器接管下载进度与保存位置，服务端零压力）
+        fetch('/api/open', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ target: info.zip_url, mode: 'url' })
+        }).then(function () {
+          btnDl.textContent = '已请求浏览器下载';
+        }).catch(function () {
+          window.open(info.zip_url, '_blank');
+          btnDl.textContent = '已打开下载页';
+        });
+      };
+      bar.appendChild(btnDl);
+    }
+    var btnClose = document.createElement('button');
+    btnClose.textContent = '×';
+    btnClose.title = '关闭提示';
+    btnClose.style.cssText = 'padding:3px 8px;border:none;background:none;' +
+      'color:#888;cursor:pointer;font-size:15px';
+    btnClose.onclick = function () { bar.remove(); };
+    bar.appendChild(btnClose);
+    var mount = document.body;
+    mount.insertBefore(bar, mount.firstChild);
+  }
+  // 启动后延迟 1.5s 查询（避开首屏关键请求）；无新版/失败静默
+  setTimeout(function () {
+    fetch('/api/update-check')
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d && d.latest) showUpdateBanner(d.latest);
+      })
+      .catch(function () { /* 静默 */ });
+  }, 1500);
 })();
 </script>
 </body>
