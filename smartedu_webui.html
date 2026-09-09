@@ -1238,5 +1238,188 @@
   }, 1500);
 })();
 </script>
+<script>
+// ---- v1.3.5 自动更新（纯追加：不动上方任何逻辑）----
+// 与后端 /api/update/* 配合：下载进度轮询 -> Windows 静默安装 / mac/linux 打开所在目录。
+(function () {
+  var PLATFORM = '';
+  var pollTimer = null;
+  fetch('/api/status').then(function (r) { return r.json(); }).then(function (d) {
+    PLATFORM = (d && d.platform) || '';
+  }).catch(function () {});
+
+  function btnStyle() {
+    return 'padding:3px 10px;border:1px solid #1d4f76;border-radius:4px;' +
+      'background:#fff;color:#1d4f76;cursor:pointer';
+  }
+
+  function pollStatus(onState) {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(function () {
+      fetch('/api/update-status').then(function (r) { return r.json(); })
+        .then(function (st) { onState(st); })
+        .catch(function () {});
+    }, 500);
+  }
+
+  function startDownload(btn) {
+    fetch('/api/update/download', { method: 'POST' })
+      .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+      .then(function (res) {
+        if (!res.ok) { btn.textContent = res.j && res.j.error || '无法开始'; return; }
+        pollStatus(function (st) { paintButton(btn, st); });
+      })
+      .catch(function () { btn.textContent = '网络异常，点此重试'; });
+  }
+
+  function paintButton(btn, st) {
+    if (st.phase === 'downloading') {
+      var pct = st.total ? Math.round(st.downloaded * 100 / st.total) : 0;
+      var mb = st.total ? '（' + (st.downloaded / 1048576).toFixed(1) + '/' +
+        (st.total / 1048576).toFixed(1) + ' MB）' : '';
+      btn.textContent = '下载中 ' + pct + '%' + mb;
+      btn.disabled = true;
+    } else if (st.phase === 'ready') {
+      btn.disabled = false;
+      btn.textContent = PLATFORM === 'windows' ? '立即安装' : '打开下载位置';
+      btn.onclick = function () {
+        if (PLATFORM === 'windows' &&
+            !window.confirm('即将退出书到了并启动 v' + (st.version || '') +
+              ' 安装器（静默安装，完成后自动打开新版本）。继续吗？')) return;
+        btn.disabled = true;
+        btn.textContent = '正在启动安装...';
+        fetch('/api/update/install', { method: 'POST' })
+          .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+          .then(function (res) {
+            if (!res.ok) {
+              btn.disabled = false;
+              btn.textContent = '安装失败，点此重试';
+              if (PLATFORM !== 'windows') showNote(res.j && res.j.error || '打开失败');
+            } else if (PLATFORM === 'windows') {
+              btn.textContent = '安装器已启动，程序即将退出...';
+            }
+          })
+          .catch(function () { btn.disabled = false; btn.textContent = '立即安装'; });
+      };
+    } else if (st.phase === 'error') {
+      btn.disabled = false;
+      btn.textContent = '更新失败，点此重试';
+      btn.title = st.error || '';
+      showNote(st.error || '更新失败');
+    } else if (st.phase === 'installing') {
+      btn.disabled = true;
+      btn.textContent = '安装器已启动...';
+    }
+  }
+
+  function showNote(text) {
+    var n = document.getElementById('update-note');
+    if (!n) {
+      n = document.createElement('div');
+      n.id = 'update-note';
+      n.style.cssText = 'margin:4px 0;font-size:12px;color:#a05a2c;';
+      var mount = document.body;
+      var bar = document.getElementById('update-banner');
+      if (bar) mount.insertBefore(n, bar.nextSibling);
+      else mount.insertBefore(n, mount.firstChild);
+    }
+    n.textContent = text;
+    setTimeout(function () { if (n) n.remove(); }, 6000);
+  }
+
+  function addAutoUpdateButton(bar) {
+    if (bar.querySelector('.js-auto-update')) return;
+    var btn = document.createElement('button');
+    btn.className = 'js-auto-update';
+    btn.textContent = '自动更新';
+    btn.style.cssText = btnStyle();
+    btn.onclick = function () { startDownload(btn); };
+    bar.appendChild(btn);
+    // 若下载已在后台进行（横幅被关过又重建），恢复按钮状态
+    fetch('/api/update-status').then(function (r) { return r.json(); })
+      .then(function (st) {
+        if (st && st.phase && st.phase !== 'idle') {
+          pollStatus(function (s) { paintButton(btn, s); });
+        }
+      }).catch(function () {});
+  }
+
+  // 旧版横幅出现时，往里补一个「自动更新」按钮
+  var mo = new MutationObserver(function () {
+    var bar = document.getElementById('update-banner');
+    if (bar && !bar.querySelector('.js-auto-update')) addAutoUpdateButton(bar);
+  });
+  mo.observe(document.body, { childList: true, subtree: true });
+  var existing = document.getElementById('update-banner');
+  if (existing) addAutoUpdateButton(existing);
+
+  // 手动检查发现新版而旧横幅不存在时（页面开得比检查晚/横幅被关），
+  // 自己建一条横幅：结构与旧版一致，按钮接线到本脚本的自动更新逻辑
+  function makeBanner(info) {
+    var bar = document.createElement('div');
+    bar.id = 'update-banner';
+    bar.style.cssText = 'margin:8px 0;padding:8px 12px;border:1px solid #2e6da4;' +
+      'border-radius:6px;background:#eef4fa;color:#1d4f76;font-size:13px;' +
+      'display:flex;gap:10px;align-items:center;flex-wrap:wrap';
+    var size = info.asset_size ? '（约 ' + (info.asset_size / 1048576).toFixed(1) + ' MB）' : '';
+    bar.innerHTML = '<span>发现新版本 v' + info.latest + size +
+      '，建议更新以获得最新修复。</span>';
+    var btnView = document.createElement('button');
+    btnView.textContent = '查看新版';
+    btnView.style.cssText = 'padding:3px 10px;border:1px solid #2e6da4;' +
+      'border-radius:4px;background:#2e6da4;color:#fff;cursor:pointer';
+    btnView.onclick = function () {
+      fetch('/api/open', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target: info.html_url, mode: 'url' })
+      }).catch(function () { window.open(info.html_url, '_blank'); });
+    };
+    bar.appendChild(btnView);
+    var btnClose = document.createElement('button');
+    btnClose.textContent = '×';
+    btnClose.title = '关闭提示';
+    btnClose.style.cssText = 'padding:3px 8px;border:none;background:none;' +
+      'color:#888;cursor:pointer;font-size:15px';
+    btnClose.onclick = function () { bar.remove(); };
+    var mount = document.body;
+    mount.insertBefore(bar, mount.firstChild);
+    addAutoUpdateButton(bar);
+    bar.appendChild(btnClose);
+  }
+
+  // 手动检查更新入口：footer 版本号旁加一个「检查更新」小按钮
+  var ver = document.getElementById('app-ver');
+  if (ver && ver.parentElement) {
+    var chk = document.createElement('button');
+    chk.textContent = '检查更新';
+    chk.style.cssText = 'margin-left:8px;padding:1px 8px;font-size:12px;' +
+      'border:1px solid #ccc;border-radius:4px;background:#fff;color:#666;' +
+      'cursor:pointer';
+    chk.onclick = function () {
+      chk.disabled = true;
+      chk.textContent = '检查中...';
+      fetch('/api/update-check').then(function (r) { return r.json(); })
+        .then(function (d) {
+          chk.disabled = false;
+          chk.textContent = '检查更新';
+          var bar = document.getElementById('update-banner');
+          if (d && d.latest) {
+            if (bar) addAutoUpdateButton(bar);
+            else makeBanner(d.latest);
+          } else {
+            showNote('当前已是最新版本');
+          }
+        })
+        .catch(function () {
+          chk.disabled = false;
+          chk.textContent = '检查更新';
+          showNote('检查更新失败（网络原因），请稍后重试');
+        });
+    };
+    ver.parentElement.appendChild(chk);
+  }
+})();
+</script>
 </body>
 </html>

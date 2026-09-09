@@ -215,6 +215,128 @@ def auto_token_abort():
     return True, ""
 
 
+# ---------- 应用内自动更新（v1.3.5） ----------
+# 状态机：idle -> downloading -> ready -> (Windows: installing) / error
+# 用户在界面点「自动更新」才启动下载；失败可重试，绝不影响当前版本运行。
+UPDATER_STATE = {
+    "phase": "idle",      # idle|downloading|ready|installing|error
+    "version": "",        # 目标版本
+    "downloaded": 0,      # 已下载字节
+    "total": 0,           # 总字节（0=未知）
+    "error": "",
+    "path": "",           # 下载完成的本地文件
+    "kind": "",           # installer（Windows 安装器）| archive（mac/linux 压缩包）
+    "cancel": False,
+}
+UPDATER_LOCK = threading.Lock()
+
+
+def update_status():
+    """更新器状态快照（HTTP 线程读）。"""
+    with UPDATER_LOCK:
+        s = UPDATER_STATE.copy()
+    s.pop("cancel", None)
+    return s
+
+
+def update_download_start():
+    """启动后台下载线程。已在下载/已就绪时返回 False。"""
+    with UPDATER_LOCK:
+        if UPDATER_STATE["phase"] in ("downloading", "ready", "installing"):
+            return False
+        UPDATER_STATE.update(phase="downloading", version="", downloaded=0,
+                             total=0, error="", path="", kind="", cancel=False)
+    threading.Thread(target=_update_worker, daemon=True).start()
+    return True
+
+
+def update_download_cancel():
+    with UPDATER_LOCK:
+        if UPDATER_STATE["phase"] != "downloading":
+            return False
+        UPDATER_STATE["cancel"] = True
+    return True
+
+
+def _update_worker():
+    """下载线程：查最新版 -> 挑本平台附件 -> 下载 -> SHA256 校验。"""
+    from .. import update as upd
+
+    def set_state(**kw):
+        with UPDATER_LOCK:
+            UPDATER_STATE.update(**kw)
+
+    def cancel_check():
+        with UPDATER_LOCK:
+            return UPDATER_STATE["cancel"]
+
+    def on_progress(done, total):
+        set_state(downloaded=done, total=total)
+
+    try:
+        info = upd.check_latest(APP_VERSION, force=True)
+        if not info or not info.get("zip_url"):
+            set_state(phase="error", error="未找到可用的新版本更新包，请稍后重试或到发布页手动下载")
+            return
+        assets = info.get("assets") or []
+        expected = upd._checksums_for(assets, info.get("asset_name") or "")
+        set_state(version=info["latest"])
+        from ..config import config_dir
+        dest = config_dir() / "updates"
+        path, err = upd.download_update(
+            info["zip_url"], info["asset_name"], expected_sha=expected,
+            dest_dir=dest, on_progress=on_progress, cancel_check=cancel_check)
+        if cancel_check():
+            set_state(phase="idle", error="", downloaded=0, total=0)
+            return
+        if err:
+            set_state(phase="error", error=err, downloaded=0, total=0)
+            return
+        kind = "installer" if (info.get("asset_name") or "").endswith("-setup.exe") \
+            else "archive"
+        set_state(phase="ready", path=path, kind=kind, error="")
+        add_log(f"新版本 v{info['latest']} 更新包已下载就绪: {path}")
+    except Exception as e:  # 任何意外都落到可重试的 error，不影响当前版本
+        set_state(phase="error", error=f"更新失败: {e}")
+
+
+def update_install():
+    """就绪后执行安装。
+
+    Windows：启动 Inno 静默安装（/SILENT），随后本程序自动退出，由安装器接管；
+    macOS/Linux：打开更新包所在目录，由用户解压替换（程序不自替换二进制）。
+    返回 (ok, err)。"""
+    with UPDATER_LOCK:
+        if UPDATER_STATE["phase"] != "ready":
+            return False, "更新包尚未就绪"
+        if STATE["running"]:
+            return False, "下载任务进行中，请先停止任务再安装更新"
+        path = UPDATER_STATE["path"]
+        kind = UPDATER_STATE["kind"] or "archive"
+        UPDATER_STATE["phase"] = "installing"
+    from .. import update as upd
+    if kind == "installer":
+        ok, err = upd.start_windows_installer(path)
+        if not ok:
+            with UPDATER_LOCK:
+                UPDATER_STATE.update(phase="error", error=err)
+            return False, err
+        add_log("安装器已启动，程序即将退出以完成升级...")
+        # 给 HTTP 应答留出发送时间，再退出进程；安装器会强制结束残留进程
+        threading.Timer(1.0, lambda: os._exit(0)).start()
+        return True, ""
+    # archive：打开所在目录让用户解压替换
+    ok, msg = open_with_default(str(Path(path).parent), mode="dir")
+    if not ok:
+        with UPDATER_LOCK:
+            UPDATER_STATE.update(phase="error", error=msg)
+        return False, msg
+    with UPDATER_LOCK:
+        UPDATER_STATE["phase"] = "ready"  # 仍可再次点「打开位置」
+    add_log(f"已在文件管理器中打开更新包目录: {Path(path).parent}")
+    return True, ""
+
+
 # ---------- 下载目录选择 & 打开文件/目录 ----------
 def _extract_path(msg):
     """从'文件已存在，跳过: <路径>'这类文案中提取存在的路径"""
@@ -854,6 +976,10 @@ class Handler(BaseHTTPRequestHandler):
         res = upd.check_latest(APP_VERSION, force=True)
         self._send_json({"latest": res} if res else {"latest": None})
 
+    def _route_update_status(self):
+        # v1.3.5：自动更新进度/状态查询
+        self._send_json(update_status())
+
     def _route_status(self):
         with LOCK:
             payload = {
@@ -866,6 +992,8 @@ class Handler(BaseHTTPRequestHandler):
                 "started_at": STATE["started_at"],
                 "finished_at": STATE["finished_at"],
                 "version": APP_VERSION,
+                "platform": ("windows" if os.name == "nt"
+                             else "macos" if sys.platform == "darwin" else "linux"),
             }
         self._send_json(payload)
 
@@ -992,6 +1120,29 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as e:
             self._send_json({"error": str(e)}, 500)
 
+    def _route_update_download(self):
+        # v1.3.5：启动更新包后台下载（重复点击幂等）
+        started = update_download_start()
+        if not started:
+            self._send_json({"ok": False,
+                             "error": "更新下载已在进行或已就绪"}, 409)
+            return
+        add_log("开始下载新版本更新包...")
+        self._send_json({"ok": True})
+
+    def _route_update_install(self):
+        # v1.3.5：执行安装（Windows 静默安装并退出本程序；mac/linux 打开所在目录）
+        ok, err = update_install()
+        if not ok:
+            self._send_json({"ok": False, "error": err}, 409)
+            return
+        self._send_json({"ok": True})
+
+    def _route_update_cancel(self):
+        # v1.3.5：取消正在进行的更新下载
+        ok = update_download_cancel()
+        self._send_json({"ok": ok})
+
     # 路由表：路径 -> 处理方法（P3-2）。/api/facets 是 /api/catalog 的历史别名。
     GET_ROUTES = {
         "/": _route_index,
@@ -1001,6 +1152,7 @@ class Handler(BaseHTTPRequestHandler):
         "/api/auto-token/status": _route_auto_token_status,
         "/api/pending-session": _route_pending_session,
         "/api/update-check": _route_update_check,
+        "/api/update-status": _route_update_status,
         "/api/status": _route_status,
     }
     POST_ROUTES = {
@@ -1011,6 +1163,9 @@ class Handler(BaseHTTPRequestHandler):
         "/api/open": _route_open,
         "/api/cancel": _route_cancel,
         "/api/discard-session": _route_discard_session,
+        "/api/update/download": _route_update_download,
+        "/api/update/install": _route_update_install,
+        "/api/update/cancel": _route_update_cancel,
     }
 
     def do_GET(self):

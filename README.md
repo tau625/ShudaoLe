@@ -27,6 +27,34 @@ https://github.com/user-attachments/assets/2e59032c-0cc7-4e00-802e-52b620c795b5
 > 非 Windows 平台说明：「一键获取令牌」已支持三平台（自动探测系统 Edge/Chrome）；
 > 「浏览…」选目录在 Linux 需安装 zenity，macOS 原生支持，也可直接手动输入路径。
 > macOS 打包未做签名，首次运行需绕过 Gatekeeper；Linux 打包版在 Ubuntu 22.04 构建。
+> 每个发布页都附带 `SHA256SUMS.txt`，可用 `sha256sum -c SHA256SUMS.txt`（Linux/macOS）
+> 或 `certutil -hashfile 文件名 SHA256`（Windows）核对下载完整性。
+
+### 应用内更新
+
+界面右上角「检查更新」可手动查新版；发现新版本时顶部会出现更新横幅，点
+「自动更新」即可自动下载（带进度与 SHA256 完整性校验）：
+
+- **Windows**：下载完成后点「立即安装」，程序退出并静默运行安装器，完成后自动打开新版
+- **macOS / Linux**：下载完成后打开更新包所在目录，解压替换旧目录即可（程序不自替换二进制，避免权限与安全问题）
+
+下载失败（网络波动/校验不符）会显示原因并可点按钮重试，不影响当前版本继续使用。
+更新缓存位于 `~/.config/shudaole/updates/`（Windows 为 `%USERPROFILE%\.config\shudaole\updates\`）。
+
+### 下载被浏览器拦截 / 提示有病毒？
+
+本程序未购买代码签名证书（个人免费项目），安装器是「无名氏」发布的新文件，
+Edge/Chrome 和 SmartScreen 会按信誉机制拦截——**这是所有未签名 exe 的通病，
+不代表文件有问题**。请按下面步骤处理：
+
+1. **核对完整性**：用发布页 `SHA256SUMS.txt` 核对哈希，一致即说明文件在传输中未被篡改
+2. **Edge/Chrome 拦截下载**：下载栏右键该文件 →「保留」；或点「···」→「保留」→
+   「仍然保留」（Chrome 类似：「保留危险文件」）
+3. **Windows SmartScreen 弹窗**：点「更多信息」→「仍要运行」
+4. **杀软报毒**：本程序只做网页解析与下载，无任何隐藏行为；可向 Microsoft 提交误报申诉
+   （https://www.microsoft.com/en-us/wdsi/filesubmission ），通常 24 小时内解除
+
+对误报敏感的用户可改用绿色版 zip（浏览器对 zip 的拦截远少于 exe），或直接从源码运行。
 
 ## 目录结构
 

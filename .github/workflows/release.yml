@@ -12,6 +12,13 @@ on:
 permissions:
   contents: write
 
+env:
+  # 可选代码签名：仓库 Secrets 配了 WINDOWS_CERT_PFX（base64）与
+  # WINDOWS_CERT_PASSWORD 时自动对安装器签名，显著降低 SmartScreen 误报；
+  # 未配置则跳过，流程照常（见 README「下载被拦截」一节）。
+  WINDOWS_CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
+  WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+
 jobs:
   build:
     strategy:
@@ -54,6 +61,23 @@ jobs:
           & ISCC.exe "/DVersion=${version}" installer.iss
           if (-not (Test-Path "ShudaoLe-${version}-setup.exe")) { throw "installer build failed" }
 
+      - name: Sign installer (optional, only when cert secret configured)
+        if: matrix.platform == 'windows' && env.WINDOWS_CERT_PFX != ''
+        shell: pwsh
+        run: |
+          $pfx = [IO.Path]::GetTempFileName() + ".pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERT_PFX))
+          try {
+            $setup = (Get-ChildItem "ShudaoLe-*-setup.exe").FullName
+            # /tr 时间戳保证证书过期后签名仍有效
+            & signtool.exe sign /fd SHA256 /td SHA256 `
+              /tr http://timestamp.digicert.com `
+              /f $pfx /p $env:WINDOWS_CERT_PASSWORD $setup
+            if ($LASTEXITCODE -ne 0) { throw "signtool failed (exit $LASTEXITCODE)" }
+          } finally {
+            Remove-Item $pfx -Force
+          }
+
       - name: Package (linux)
         if: matrix.platform == 'linux'
         shell: bash
@@ -73,3 +97,23 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: ShudaoLe-*
+
+  checksums:
+    # 三个平台的附件全部挂完后，生成整包 SHA256SUMS.txt 一起上传：
+    # 用户可核对完整性；应用内更新器也用它校验下载结果（shudaole/update.py）
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download release assets and generate SHA256SUMS.txt
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+          mkdir assets && cd assets
+          gh release download "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" \
+            --pattern 'ShudaoLe-*' --clobber
+          rm -f SHA256SUMS.txt
+          sha256sum ShudaoLe-* > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          gh release upload "${GITHUB_REF_NAME}" SHA256SUMS.txt \
+            --repo "${GITHUB_REPOSITORY}" --clobber
