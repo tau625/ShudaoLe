@@ -21,7 +21,7 @@ VSVersionInfo(
         u'040904b0',
         [StringStruct(u'CompanyName', u'ShudaoLe'),
         StringStruct(u'FileDescription', u'ShudaoLe (Book Arrived) - Textbook Downloader'),
-        StringStruct(u'FileVersion', u'1.3.3'),
+        StringStruct(u'FileVersion', u'1.3.4'),
         StringStruct(u'InternalName', u'ShudaoLe'),
         StringStruct(u'LegalCopyright', u'Personal use only'),
         StringStruct(u'OriginalFilename', u'ShudaoLe.exe'),
