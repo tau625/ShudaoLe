@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 """命名/链接解析纯函数测试：parse_content_id、normalize_title、build_filename 等。"""
+import os
+
 import pytest
 
 from shudaole.errors import DownloadError
@@ -127,5 +129,9 @@ def test_resolve_dest_renames_on_small_file(tmp_path):
 
 
 def test_resolve_dest_reject_escape(tmp_path):
+    if os.name == "nt":
+        evil = "..\\..\\evil"
+    else:
+        evil = "../../evil"
     with pytest.raises(DownloadError):
-        resolve_dest(tmp_path, ".." + "\\" + ".." + "\\" + "evil")
+        resolve_dest(tmp_path, evil)
