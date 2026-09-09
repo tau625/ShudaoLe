@@ -1482,5 +1482,225 @@
   }
 })();
 </script>
+<script>
+/* ============ 筛选防错增强（追加段，不动上方任何原逻辑） ============
+   1) 快捷组合芯片（学段×版本一键）
+   2) 版本识别提示悬浮（下拉 option + 结果列表版本列）
+   3) 多版本并存风险徽标
+   4) 下载前确认弹窗（清单 + 风险标注 + 目录展示）          */
+(function () {
+  'use strict';
+
+  // ---------- 2) 版本下拉悬浮提示：每次 fillPublisherFacet 重建后补 title ----------
+  var PMETA = {};   // value -> meta 文案（从 facets 数据带下来）
+  var moPub = new MutationObserver(function () {
+    var sel = document.getElementById('f-publisher');
+    if (!sel) return;
+    sel.querySelectorAll('option').forEach(function (o) {
+      if (PMETA[o.value]) o.title = PMETA[o.value];
+    });
+  });
+  moPub.observe(document.body, { childList: true, subtree: true });
+  // publisher facets 数据在主脚本 reload() 里异步刷新，这里周期性同步 PMETA
+  // （读不到主脚本变量，用只读 DOM 之外的方式：拦截 fetch 响应太重，改为
+  //   每次 facets 渲染后由下面的钩子写入；此处仅消费）
+  window.__shudaolePubMeta = PMETA;
+
+  // ---------- 3) 多版本风险徽标 + 版本悬浮：增强结果表（渲染后修饰） ----------
+  var moRows = new MutationObserver(function () {
+    var tbody = document.getElementById('cat-body');
+    if (!tbody || !tbody.rows.length) return;
+    var pubSel = document.getElementById('f-publisher');
+    var pubLocked = !!(pubSel && pubSel.value);   // 用户已选版本则不再提示
+    // 用当前 facets 的 publisher 候选数与结果行版本做对比：同一(年级+科目)
+    // 行内出现 ≥2 个不同版本即标风险（数据来自行内文本，无需后端再算）
+    var seen = {};
+    Array.prototype.forEach.call(tbody.rows, function (tr) {
+      var pubCell = tr.cells[4];
+      if (!pubCell) return;
+      var pub = (pubCell.textContent || '').split(' · ')[0].trim();
+      var grade = (tr.cells[1] || {}).textContent || '';
+      var subject = (tr.cells[2] || {}).textContent || '';
+      var key = grade + '|' + subject;
+      (seen[key] = seen[key] || new Set()).add(pub);
+    });
+    Object.keys(seen).forEach(function (k) {
+      var set = seen[k];
+      var risk = !pubLocked && set.size >= 2 && !set.has('-');
+      Array.prototype.forEach.call(tbody.rows, function (tr) {
+        var grade = (tr.cells[1] || {}).textContent || '';
+        var subject = (tr.cells[2] || {}).textContent || '';
+        if (grade + '|' + subject !== k) return;
+        var pubCell = tr.cells[4];
+        if (risk && !pubCell.querySelector('.mv-badge')) {
+          var b = document.createElement('span');
+          b.className = 'mv-badge';
+          b.textContent = '⚠ ' + set.size + '版并存';
+          b.title = '该年级科目的教材有 ' + set.size + ' 个版本，请确认是孩子学校使用的版本再下载';
+          b.style.cssText = 'display:inline-block;margin-left:4px;padding:0 5px;font-size:11px;' +
+            'color:#a05a2c;background:#fdf1e3;border:1px solid #e8c9a0;border-radius:8px;white-space:nowrap';
+          pubCell.appendChild(b);
+        }
+        // 版本悬浮提示
+        var pubName = (pubCell.textContent || '').split('⚠')[0].split(' · ')[0].trim();
+        if (PMETA[pubName]) pubCell.title = PMETA[pubName];
+      });
+    });
+  });
+  moRows.observe(document.body, { childList: true, subtree: true });
+
+  // ---------- 4) 下载前确认弹窗 ----------
+  function confirmDialog(entries, missing, outDir, onOk) {
+    var old = document.getElementById('dl-confirm');
+    if (old) old.remove();
+    var overlay = document.createElement('div');
+    overlay.id = 'dl-confirm';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(30,20,10,.45);' +
+      'z-index:9999;display:flex;align-items:center;justify-content:center';
+    var box = document.createElement('div');
+    box.style.cssText = 'background:#fffdf8;border:1px solid #b23a2e;border-radius:10px;' +
+      'max-width:560px;width:92%;max-height:80vh;display:flex;flex-direction:column;' +
+      'padding:20px 24px;box-shadow:0 10px 34px rgba(0,0,0,.28);font-size:13px;color:#3a2a20';
+    var riskN = entries.filter(function (e) { return e.multi_version_risk; }).length;
+    var html = '<div style="font-size:15px;font-weight:600;color:#b23a2e;margin-bottom:6px">下载前确认</div>';
+    if (riskN) html += '<div style="background:#fdf1e3;border:1px solid #e8c9a0;border-radius:6px;' +
+      'padding:6px 10px;margin-bottom:8px;color:#a05a2c">⚠ 检测到 <b>' + riskN + '</b> 本教材的年级科目存在多个版本，' +
+      '请核对版本是否为孩子学校所用（悬浮版本名可见识别提示）</div>';
+    html += '<div style="margin-bottom:4px">将下载 <b>' + entries.length + '</b> 本教材' +
+      (missing ? '（<span style="color:#a05a2c">' + missing + ' 条链接未识别，下载时将按链接处理</span>）' : '') +
+      '　→　<span style="color:#666">' + escapeHtml(outDir || 'downloads') + '</span></div>';
+    var MAXSHOW = 50;
+    var rows = entries.slice(0, MAXSHOW).map(function (e) {
+      return '<div style="padding:3px 0;border-bottom:1px dashed #eee">' +
+        (e.multi_version_risk ? '<span style="color:#c47b3a">⚠</span> ' : '') +
+        '<b>' + escapeHtml(e.title) + '</b>' +
+        '<span style="color:#888">　' + escapeHtml([e.grade, e.subject].filter(Boolean).join(' · ')) + '</span>' +
+        (e.publisher ? '　<span title="' + escapeHtml(e.publisher_meta || '') + '" style="color:#b23a2e">[' + escapeHtml(e.publisher) + ']</span>' : '') +
+        (e.audience === '教师用书' ? '　<span style="color:#a05a2c">「教师用书」</span>' : '') +
+        '</div>';
+    }).join('');
+    html += '<div style="overflow:auto;border:1px solid #eee;border-radius:6px;padding:8px 10px;margin:6px 0;flex:1">' + rows +
+      (entries.length > MAXSHOW ? '<div style="color:#888;padding-top:6px">… 等共 ' + entries.length + ' 本</div>' : '') + '</div>';
+    box.innerHTML = html;
+    var rowBtn = document.createElement('div');
+    rowBtn.style.cssText = 'display:flex;gap:10px;justify-content:flex-end;padding-top:8px';
+    function mkBtn(t, primary) {
+      var b = document.createElement('button');
+      b.textContent = t;
+      b.style.cssText = 'padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;' +
+        (primary ? 'background:#b23a2e;color:#fff;border:1px solid #b23a2e;'
+                 : 'background:#fff;color:#666;border:1px solid #ccc;');
+      return b;
+    }
+    var back = mkBtn('返回检查');
+    back.onclick = function () { overlay.remove(); };
+    var ok = mkBtn('确认下载', true);
+    ok.onclick = function () { overlay.remove(); onOk(); };
+    rowBtn.appendChild(back); rowBtn.appendChild(ok);
+    box.appendChild(rowBtn);
+    overlay.appendChild(box);
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+  }
+
+  var btnStart = document.getElementById('btn-start');
+  if (btnStart) {
+    var origStart = btnStart.onclick;      // 保留主脚本绑定的原下载逻辑
+    btnStart.onclick = function () {
+      var linksText = (document.getElementById('links') || {}).value || '';
+      var ids = linksText.split('\n').map(function (l) { return l.trim(); })
+        .filter(function (l) { return l && l.indexOf('#') !== 0; });
+      if (!ids.length) { if (origStart) origStart(); return; }   // 空列表走原逻辑（会提示）
+      var qs = 'ids=' + encodeURIComponent(ids.join(','));
+      fetch('/api/resolve-entries?' + qs)
+        .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+        .then(function (res) {
+          var outDir = ((document.getElementById('output') || {}).value || '').trim() || 'downloads';
+          if (!res.ok || !res.j.entries) {
+            confirmDialog([], ids.length, outDir, function () { if (origStart) origStart(); });
+            return;
+          }
+          confirmDialog(res.j.entries, res.j.missing || 0, outDir, function () {
+            if (origStart) origStart();
+          });
+        })
+        .catch(function () { if (origStart) origStart(); });      // 网络异常不拦下载
+    };
+  }
+
+  // ---------- 1) 快捷组合芯片 ----------
+  function renderCombos(combos) {
+    var wrap = document.getElementById('quick-combos');
+    if (!wrap) {
+      var filterRow = document.querySelector('.row[data-filters], #filters, form .row');
+      var scopeNote = document.querySelector('.scope-note');
+      wrap = document.createElement('div');
+      wrap.id = 'quick-combos';
+      wrap.style.cssText = 'margin:6px 0 2px;display:flex;gap:8px;flex-wrap:wrap;align-items:center';
+      var lab = document.createElement('span');
+      lab.textContent = '常用组合：';
+      lab.style.cssText = 'font-size:12px;color:#8a7f6d';
+      wrap.appendChild(lab);
+      (scopeNote || filterRow || document.body).parentElement
+        .insertBefore(wrap, scopeNote ? scopeNote.nextSibling : wrap);
+    }
+    wrap.querySelectorAll('button.js-combo').forEach(function (b) { b.remove(); });
+    (combos || []).forEach(function (c) {
+      var b = document.createElement('button');
+      b.className = 'js-combo';
+      b.textContent = c.label;
+      var m = c.publisher_meta || '';
+      b.title = m || ('一键选中：' + c.phase + ' + ' + c.publisher);
+      b.style.cssText = 'padding:2px 10px;font-size:12px;border:1px solid #d8cdb8;border-radius:14px;' +
+        'background:#faf6ee;color:#6b5d45;cursor:pointer';
+      b.onclick = function () {
+        var ph = document.getElementById('f-phase');
+        var pub = document.getElementById('f-publisher');
+        if (ph) ph.value = c.phase;
+        if (pub) pub.value = '';
+        // 版本下拉的值在 reload 前不可靠（选项尚未生成），先按学段刷新，
+        // 再由 facets 渲染完成后由 chips 确认；这里直接触发主脚本 reload()
+        var ev = document.createEvent ? null : null;
+        if (typeof reload === 'function') {
+          reload();
+        } else {
+          // 主脚本 reload 是闭包内函数不可达时，模拟 change 事件触发级联
+          [ph, pub].forEach(function (el) {
+            if (!el) return;
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+          });
+        }
+        // 二段：等 facets 刷新出选项后再设版本并再刷一次
+        setTimeout(function () {
+          if (pub) { pub.value = c.publisher; pub.dispatchEvent(new Event('change', { bubbles: true })); }
+          var cat = document.getElementById('cat-body');
+          if (cat) cat.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }, 600);
+      };
+      wrap.appendChild(b);
+    });
+  }
+
+  // facets 数据携带 quick_combos 与 publisher meta：用 fetch 包装器捕获（只读不改）
+  var _origFetch = window.fetch;
+  window.fetch = function () {
+    var url = String(arguments[0]);
+    return _origFetch.apply(this, arguments).then(function (resp) {
+      if (url.indexOf('/api/facets') === 0 || url.indexOf('/api/facets') > -1) {
+        try {
+          var clone = resp.clone();
+          clone.json().then(function (j) {
+            (j.facets && j.facets.publisher || []).forEach(function (f) {
+              if (f.meta) PMETA[f.value] = f.meta;
+            });
+            if (j.quick_combos) renderCombos(j.quick_combos);
+          }).catch(function () {});
+        } catch (e) {}
+      }
+      return resp;
+    });
+  };
+})();
+</script>
 </body>
 </html>

@@ -38,8 +38,10 @@ from ..config import TOKEN_FILE, path_is_relative_to  # noqa: E402
 from ..catalog import (  # noqa: E402
     DIM_LABELS, FILTER_DIMS, ENABLED_DIMS, catalog_facets, fetch_catalog_index,
     search_catalog, publisher_facets, relax_suggestions,
-    SUPPORTED_SCOPE, DEFAULT_FILTERS,
+    SUPPORTED_SCOPE, DEFAULT_FILTERS, publisher_meta, quick_combos,
+    multi_version_risk,
 )
+from ..naming import parse_content_id  # noqa: E402
 from ..download import (AuthContext, initial_token, download_many)
 from ..logutil import attach_callback  # noqa: E402
 from .. import token as auto_fetch_token  # noqa: E402  一键令牌抓取（进程内调用，随 exe 打包零依赖）
@@ -925,6 +927,10 @@ class Handler(BaseHTTPRequestHandler):
             # 科学标成了三个不同标签，只给分组则无法精确选，只给标签则下全套要选三次
             result["facets"]["publisher"] = publisher_facets(
                 result["facets"].get("publisher", []))
+            # 版本候选附识别提示（家长往往不知道孩子用哪版）；快捷芯片数据驱动
+            for f in result["facets"]["publisher"]:
+                f["meta"] = publisher_meta(
+                    f["value"] if not f.get("is_group") else f["value"])
             payload = {
                 "ok": True,
                 "total": len(matches),          # 命中总数（含版本组约束）
@@ -935,6 +941,7 @@ class Handler(BaseHTTPRequestHandler):
                 "enabled_dims": list(ENABLED_DIMS),  # 前端据此动态渲染下拉
                 "scope": SUPPORTED_SCOPE,       # 完整支持范围（其余为占位）
                 "default_filters": DEFAULT_FILTERS,  # 首屏替用户预选的条件
+                "quick_combos": quick_combos(items),  # 学段×版本 一键芯片
             }
             if not matches:
                 # 空结果只说"没有匹配"毫无帮助；告诉用户去掉哪条能找回结果
@@ -944,6 +951,49 @@ class Handler(BaseHTTPRequestHandler):
             self._send_json(payload)
         except Exception as e:
             self._send_json({"error": f"教材目录获取失败: {e}"}, 502)
+
+    def _route_resolve_entries(self):
+        # 下载前确认弹窗的数据源：contentId 列表 -> 教材元数据 + 多版本风险。
+        # GET /api/resolve-entries?ids=id1,id2,...（逗号分隔，上限 500 防滥用）；
+        # ids 值含整行详情页链接时按行解析 contentId（直接粘贴 #links 内容的场景）
+        q = parse_qs(urlsplit(self.path).query or "")
+        raw = (q.get("ids") or [""])[0]
+        if "http" in raw or "contentId=" in raw or "\n" in raw:
+            lines = [x.strip() for x in raw.replace(",", "\n").splitlines()
+                     if x.strip() and not x.strip().startswith("#")]
+            ids = [c for c in (parse_content_id(x) for x in lines) if c][:500]
+        else:
+            ids = [x.strip() for x in raw.split(",") if x.strip()][:500]
+        if not ids:
+            self._send_json({"error": "未提供有效的教材链接或 contentId"}, 400)
+            return
+        try:
+            items = get_catalog(refresh=False)
+            by_id = {it.get("id"): it for it in items}
+            entries, missing = [], 0
+            for cid in ids:
+                it = by_id.get(cid)
+                if not it:
+                    missing += 1
+                    continue
+                risk, vcount, _ = multi_version_risk(
+                    items, it.get("grade") or "", it.get("subject") or "")
+                entries.append({
+                    "id": cid,
+                    "title": it.get("title") or "",
+                    "phase": it.get("phase") or "",
+                    "grade": it.get("grade") or "",
+                    "subject": it.get("subject") or "",
+                    "publisher": it.get("publisher") or "",
+                    "publisher_meta": publisher_meta(it.get("publisher") or ""),
+                    "volume": it.get("volume") or "",
+                    "audience": it.get("audience") or "",
+                    "multi_version_risk": risk,
+                    "version_count": vcount,
+                })
+            self._send_json({"ok": True, "entries": entries, "missing": missing})
+        except Exception as e:
+            self._send_json({"error": f"解析失败: {e}"}, 500)
 
     def _route_auto_token_status(self):
         self._send_json(auto_token_status())
@@ -1149,6 +1199,7 @@ class Handler(BaseHTTPRequestHandler):
         "/index.html": _route_index,
         "/api/catalog": _route_catalog,
         "/api/facets": _route_catalog,
+        "/api/resolve-entries": _route_resolve_entries,
         "/api/auto-token/status": _route_auto_token_status,
         "/api/pending-session": _route_pending_session,
         "/api/update-check": _route_update_check,

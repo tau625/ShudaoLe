@@ -442,7 +442,7 @@ DIM_ALIASES = {"grade": GRADE_ALIASES}
 # 下拉展示；此白名单同时供 GUI 渲染下拉与 CLI 参考，避免前后端各维护一份规则。
 # 设为 None 表示启用 FILTER_DIMS 中的全部维度。
 
-ENABLED_DIMS = ("phase", "grade", "subject", "publisher", "volume")
+ENABLED_DIMS = ("phase", "grade", "subject", "publisher", "volume", "audience")
 
 # 当前完整支持的筛选范围。phase 覆盖平台全部基础教育学段（含特殊教育，用户可按需
 # 过滤）；版本维度用「可见分组」模型，但 SHOW_ALL_PUBLISHERS 开启后未分组标签也
@@ -453,10 +453,15 @@ SUPPORTED_SCOPE = {
     "phase": ["小学", "初中", "高中", "特殊教育"],
 }
 # 默认筛选：某维度限定范围且只剩一个可选值时，进入界面就替用户选中。
-# 学段全开放后各学段均可自由切换，无需预选（此值为空字典，首屏按认知顺序
-# 展示全部学段，小学排在最前）。
+# 学段全开放后各学段均可自由切换，无需预选；用途默认「学生用书」——数据里
+# 550 条教师用书与学生教材混排，家长容易误下教师版（AUDIENCE_EXCLUDE 机制
+# 见 dim_match_excluded，「学生用书」= 排除教师用书而非精确匹配标签，
+# 因为 3070 条教材未标 audience，它们默认就是学生用的）。
+
+AUDIENCE_EXCLUDE = {"学生用书": ("教师用书",)}
 
 DEFAULT_FILTERS = {d: v[0] for d, v in SUPPORTED_SCOPE.items() if len(v) == 1}
+DEFAULT_FILTERS.setdefault("audience", "学生用书")
 
 # 版本下拉可见项：显示名 -> 覆盖的真实 publisher 标签集合（其余标签整体隐藏）。
 # 「人教版系」 = 人教版(数学/英语等) + 统编版(语文/道德与法治) + 人教鄂教版(科学)，
@@ -465,11 +470,13 @@ DEFAULT_FILTERS = {d: v[0] for d, v in SUPPORTED_SCOPE.items() if len(v) == 1}
 PUB_GROUPS = {
     "人教版系": ["人教版", "统编版", "人教鄂教版"],
     "沪教版": ["沪教版"],
+    "北师大版系": ["北师大版", "华东师大版"],
 }
 # 分组在下拉里的显示名（optgroup 标题）；未列出的直接用组名
 
 PUB_GROUP_LABELS = {
     "人教版系": "人教系列",
+    "北师大版系": "北师大系列",
 }
 # 版本排序权重：按 PUB_GROUPS 的声明顺序展开，未知版本排最后
 
@@ -481,6 +488,99 @@ PUB_ORDER = [tag for tags in PUB_GROUPS.values() for tag in tags]
 # 分组仅作为常用版本的"整套选"快捷入口保留。
 
 SHOW_ALL_PUBLISHERS = True
+
+# 版本识别提示：家长大多不知道孩子用哪个版本（版本是"被动识别"维度），
+# 为常用版本/分组附一句识别线索（出版社全称 + 封面特征），展示在版本下拉、
+# 结果列表与确认弹窗的悬浮提示里。未收录的版本不显示提示。
+# 文案原则：只写可核对的客观特征，不写"最常用"这类主观判断。
+
+PUB_META = {
+    "人教版系": "人民教育出版社。语文/道法封面标「统编版」，数学等标「人教版」，右下角有人民教育出版社社标",
+    "人教版": "人民教育出版社。封面右下角「人民教育出版社」社标",
+    "统编版": "国家统一编写教材（教育部组织），语文/道德与法治使用。出版社为人民教育出版社",
+    "人教鄂教版": "人民教育出版社与湖北教育出版社合编，主要用于科学等科目",
+    "沪教版": "上海教育出版社。封面右下角「上海教育出版社」",
+    "北师大版": "北京师范大学出版社。封面右下角「北京师范大学出版社」社标",
+    "华东师大版": "华东师范大学出版社。封面右下角「华东师范大学出版社」（与北师大版同属师范系，注意区分校名）",
+    "苏教版": "江苏凤凰教育出版社。封面标注「江苏凤凰教育出版社」",
+    "苏科版": "江苏凤凰科学技术出版社。封面标注「江苏凤凰科学技术出版社」",
+    "苏少版": "江苏凤凰少年儿童出版社。封面标注「江苏凤凰少年儿童出版社」",
+    "浙教版": "浙江教育出版社。封面右下角「浙江教育出版社」",
+    "湘教版": "湖南教育出版社。封面右下角「湖南教育出版社」",
+    "湘文艺版": "湖南文艺出版社。主要用于音乐等艺术科目",
+    "湘美版": "湖南美术出版社。主要用于美术科目",
+    "冀教版": "河北教育出版社。封面右下角「河北教育出版社」",
+    "鲁教版": "山东教育出版社。封面右下角「山东教育出版社」",
+    "北京版": "北京出版社（北京教育科学研究院）。封面标注「北京出版社」",
+    "青岛版": "青岛出版社。封面右下角「青岛出版社」",
+    "外研社版": "外语教学与研究出版社。主要用于英语科目，封面有 FLTRP 社标",
+    "教科版": "教育科学出版社。主要用于科学等科目，封面标注「教育科学出版社」",
+    "粤教版": "广东教育出版社。封面右下角「广东教育出版社」",
+    "人音版": "人民音乐出版社。主要用于音乐科目",
+    "人美版": "人民美术出版社。主要用于美术科目",
+    "地质社版": "地质出版社。主要用于高中通用技术等科目",
+    "辽海版": "辽海出版社。封面右下角「辽海出版社」",
+    "西南大学版": "西南师范大学出版社。封面标注「西南师范大学出版社」",
+    "沪科技版": "上海科学技术出版社。封面右下角「上海科学技术出版社」",
+}
+
+
+def publisher_meta(name):
+    """版本/分组名 -> 识别提示文案；未收录返回空串。
+
+    分组名（如「人教版系」）优先查自身，再退回组内任一成员的提示；
+    这样新增分组无需重复维护文案。"""
+    if not name:
+        return ""
+    direct = PUB_META.get(name)
+    if direct:
+        return direct
+    tags = PUB_GROUPS.get(name) or [name]
+    for t in tags:
+        if PUB_META.get(t):
+            return PUB_META[t]
+    return ""
+
+
+# 快捷组合芯片：学段 × 版本分组的一键入口（如「初中·人教全套」）。
+# 生成规则：基础学段（不含特教）× PUB_GROUPS 分组，目录中无内容的组合
+# 自动过滤。芯片只负责选好筛选条件（学段+版本），不自动加入下载——
+# 下载多少本的决策留给用户。
+
+QUICK_COMBO_PHASES = ("小学", "初中", "高中")
+
+
+def quick_combos(items):
+    """根据目录实际内容生成快捷组合列表：[{label, phase, publisher}]。"""
+    have = set()
+    for it in items:
+        if it.get("kind") != "textbook":
+            continue
+        have.add((it.get("phase") or "", (it.get("publisher") or "").strip()))
+    out = []
+    for ph in QUICK_COMBO_PHASES:
+        for group, tags in PUB_GROUPS.items():
+            if any((ph, t) in have for t in tags):
+                label = PUB_GROUP_LABELS.get(group, group).replace("系列", "")
+                out.append({"label": f"{ph}·{label}全套",
+                            "phase": ph, "publisher": group})
+    return out
+
+
+def multi_version_risk(items, grade, subject, exclude_id=None):
+    """(年级, 科目) 下是否存在多个版本并存（家长下错版本的风险信号）。
+
+    exclude_id：风险统计时排除的条目 id（判断条目自身时不把自己算进去
+    没有意义，保留参数仅为调用方语义清晰）。返回 (risk, count, versions)。"""
+    versions = set()
+    for it in items:
+        if it.get("kind") != "textbook":
+            continue
+        if (it.get("grade") or "") == grade and (it.get("subject") or "") == subject:
+            v = (it.get("publisher") or "").strip()
+            if v:
+                versions.add(v)
+    return len(versions) >= 2, len(versions), sorted(versions)
 # 科目排序权重：主科在前，符合"先找主科"的检索习惯
 
 SUBJECT_ORDER = ["语文", "数学", "英语", "道德与法治", "科学", "体育与健康",
@@ -602,6 +702,11 @@ def dim_match(item, dim, query):
         return True
     aliases = DIM_ALIASES.get(dim, {})
     query = aliases.get(query, query)
+    # audience 特殊语义：「学生用书」按"排除教师用书"处理（未标记 audience 的
+    # 3070 条教材默认就是学生用书，精确匹配会把它们全部误排除）
+    if dim == "audience" and query in AUDIENCE_EXCLUDE:
+        excluded = (item.get(dim) or "").strip()
+        return not any(e in excluded for e in AUDIENCE_EXCLUDE[query])
     value = (item.get(dim) or "").strip()
     if not value:
         return False

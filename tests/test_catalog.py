@@ -66,8 +66,25 @@ def test_publisher_facets_sample(sample_items):
 # ---------- 常量一致性 ----------
 
 def test_default_filters_within_scope():
+    # audience 的「学生用书」是排除语义（AUDIENCE_EXCLUDE），不属 SUPPORTED_SCOPE
     for dim, val in DEFAULT_FILTERS.items():
+        if dim == "audience":
+            continue
         assert val in SUPPORTED_SCOPE[dim], dim
+
+
+def test_default_audience_is_student():
+    """首屏默认只看学生用书（排除教师用书），家长不易误下教师版。"""
+    assert DEFAULT_FILTERS.get("audience") == "学生用书"
+
+
+def test_audience_exclude_semantics(sample_items):
+    """「学生用书」= 排除教师用书；未标记 audience 的条目默认学生用书（命中）。"""
+    for it in sample_items:
+        assert dim_match(it, "audience", "学生用书") is True
+    teacher = dict(sample_items[0], audience="教师用书")
+    assert dim_match(teacher, "audience", "学生用书") is False
+    assert dim_match(teacher, "audience", "教师用书") is True
 
 
 def test_all_phases_open():
@@ -79,10 +96,11 @@ def test_all_phases_open():
 
 def test_publisher_label_ungrouped_visible():
     """SHOW_ALL_PUBLISHERS 开启：未分组标签顶层可见（返回自身）。"""
-    assert publisher_label("北师大版") == "北师大版"
+    assert publisher_label("教科版") == "教科版"   # 未收入任何分组的标签
     grouped = next(iter(PUB_GROUPS))
     first_tag = PUB_GROUPS[grouped][0]
     assert publisher_label(first_tag) == grouped
+    assert publisher_label("北师大版") == "北师大版系"   # 已收入分组的返回分组名
 
 
 def test_publisher_facets_shows_ungrouped():
@@ -108,6 +126,37 @@ def test_shutdown_browser_dead_proc_noop():
             return 0
 
     token_mod._shutdown_browser(1, _DeadProc())  # 端口 1 不可达 → 走兜底 → 进程已死直接返回
+
+
+# ---------- 筛选防错：版本提示 / 快捷组合 / 多版本风险 ----------
+
+def test_publisher_meta_known_and_unknown():
+    from shudaole.catalog import publisher_meta
+    assert "人民教育出版社" in publisher_meta("人教版")
+    assert publisher_meta("人教版系")          # 分组名回退到组内成员文案
+    assert publisher_meta("不存在的版本") == ""
+
+
+def test_quick_combos_generated(sample_items):
+    from shudaole.catalog import quick_combos
+    combos = quick_combos(sample_items)
+    labels = [c["label"] for c in combos]
+    # sample 里有 小学+人教版（属人教版系组），应生成「小学·人教全套」
+    assert any(c["phase"] == "小学" and c["publisher"] == "人教版系" for c in combos), labels
+    assert all(c["phase"] != "特殊教育" for c in combos)
+
+
+def test_multi_version_risk():
+    from shudaole.catalog import multi_version_risk
+    items = [
+        {"kind": "textbook", "grade": "七年级", "subject": "数学", "publisher": "人教版"},
+        {"kind": "textbook", "grade": "七年级", "subject": "数学", "publisher": "北师大版"},
+        {"kind": "textbook", "grade": "七年级", "subject": "语文", "publisher": "统编版"},
+    ]
+    risk, count, versions = multi_version_risk(items, "七年级", "数学")
+    assert risk is True and count == 2 and set(versions) == {"人教版", "北师大版"}
+    risk2, count2, _ = multi_version_risk(items, "七年级", "语文")
+    assert risk2 is False and count2 == 1
 
 
 # ---------- normalize_catalog ----------
