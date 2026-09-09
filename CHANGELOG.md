@@ -3,6 +3,19 @@
 本文件记录「书到了」（ShudaoLe）各版本的用户可感知变更。格式参照
 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)，版本号遵循语义化版本。
 
+## [1.3.1] · 2026-09-09
+
+「内部优化版」：P3 三项落地，无功能变化，重刷界面与代码结构。
+
+### 变更
+
+- **前端轮询统一**：界面 4 个独立定时器合并为单心跳协调器，页面切后台自动降频（×4），状态轮询按运行状态自适应——后台 CPU 占用更低
+- **GUI 路由表化**：本地服务的 11 个端点从 if-elif 改为字典分发，行为零变化，后续加端点更稳
+
+### 文档
+
+- 新建本 CHANGELOG；README 目录结构、下载方式、开发笔记与 v1.3.0 现状对齐
+
 ## [1.3.0] · 2026-09-09
 
 「功能增强版」：P2 六项落地 + P1 工程化地基，首个提供 Windows 安装包的版本。
@@ -79,6 +92,7 @@
 
 首个公开版本：一键下载国家中小学智慧教育平台官方教材 PDF（Windows 绿色版）。
 
+[1.3.1]: https://github.com/tau625/ShudaoLe/releases/tag/v1.3.1
 [1.3.0]: https://github.com/tau625/ShudaoLe/releases/tag/v1.3.0
 [1.2.1]: https://github.com/tau625/ShudaoLe/releases/tag/v1.2.1
 [1.2.0]: https://github.com/tau625/ShudaoLe/releases/tag/v1.2.0
