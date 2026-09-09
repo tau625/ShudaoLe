@@ -15,9 +15,14 @@
 
 [Setup]
 AppId={{8C1C4E2A-95D3-4B7A-9E0F-SHUDAOLE01}
-; 程序启动时创建同名互斥量（server.py _acquire_app_mutex），
-; 安装/升级时检测到则弹出「请先关闭书到了」的友好提示，而非文件占用报错
+; 程序启动时创建同名互斥量（server.py _acquire_app_mutex）。
+; 兜底检测：若 [Code] 里的 KillRunningApp 没杀干净（如权限异常），
+; 走到这一步会弹「请先关闭书到了」提示，而不是文件占用的生硬报错
 AppMutex=ShudaoLeAppMutex
+; 不用 Inno 自带的重启管理器关应用：本程序无 Win32 窗口（界面在浏览器），
+; RM 发 WM_CLOSE 收不到，对话框里「关闭程序」按钮永远杀不掉，徒增困惑。
+; 关闭/结束统一由 [Code] 的 KillRunningApp 强杀完成
+CloseApplications=no
 AppName={#AppName}
 AppVersion={#Version}
 AppVerName={#AppName} {#Version}（{#AppNameEn}）
@@ -69,3 +74,33 @@ Filename: "{app}\{#AppExeName}"; Description: "{cm:LaunchProgram,{#AppName}}"; F
 [UninstallDelete]
 ; 只清理程序目录内我们生成的缓存/日志，绝不碰用户下载目录
 Type: files; Name: "{app}\catalog_cache.json"
+
+[Code]
+// 安装前 / 卸载前强制结束运行中的书到了：
+// 程序无 Win32 窗口（界面在浏览器里），taskkill 不带 /F 发 WM_CLOSE 收不到，
+// 只能强杀；下载任务有持久化（tasks.json），强杀无损，下次启动会提示续传。
+// 无条件按映像名杀两轮——旧版本（≤1.3.1）不创建互斥量，不能靠 AppMutex 判断在不在跑。
+procedure KillRunningApp();
+var
+  R: Integer;
+  I: Integer;
+begin
+  for I := 1 to 2 do
+  begin
+    Exec(ExpandConstant('{sys}\taskkill.exe'),
+      '/f /t /im "{#AppExeName}"', '', SW_HIDE, ewWaitUntilTerminated, R);
+    Sleep(600);
+  end;
+end;
+
+function InitializeSetup(): Boolean;
+begin
+  KillRunningApp();
+  Result := True;  // 返回 False 会中止安装；此处只杀进程，继续正常流程
+end;
+
+function InitializeUninstall(): Boolean;
+begin
+  KillRunningApp();
+  Result := True;  // 返回 False 会中止卸载；此处只杀进程，继续正常流程
+end;
