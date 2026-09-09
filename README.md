@@ -264,10 +264,15 @@ python smartedu_downloader.py --phase 小学 --publisher 人教版 --subject 数
 ## 如何启用更多版本 / 学段
 
 版本可见分组 `PUB_GROUPS`、学段开放范围 `SUPPORTED_SCOPE`、界面展示维度 `ENABLED_DIMS`
-统一定义在 **`smartedu_downloader.py`** 顶部，命令行与网页界面共用同一份规则，
+统一定义在 **`shudaole/catalog.py`** 中，命令行与网页界面共用同一份规则，
 不会出现两处各改一次导致不一致。
 
-要启用更多版本（如 北师大版、教科版…），往 `PUB_GROUPS` 加一行并重启 GUI：
+**当前默认已开放全部学段**（小学 / 初中 / 高中 / 特殊教育）；版本方面，
+常用分组（人教系列、沪教版）以"整套选"分组呈现，其余版本标签由
+`SHOW_ALL_PUBLISHERS = True` 控制全部列出（按结果数排序）。若想回到
+"只看分组"的白名单模式，把它改为 `False`。
+
+要把某组版本合并成"整套选"分组（如 北师大版系），往 `PUB_GROUPS` 加一行并重启：
 
 ```python
 PUB_GROUPS = {
@@ -282,9 +287,9 @@ PUB_GROUPS = {
 - 组内**多于一个**标签 → 渲染成「分组（整套选）+ 组内真实标签（精确选）」两级
 - 组内**只有一个**标签 → 直接作为顶层选项，不制造冗余的两层
 
-`SUPPORTED_SCOPE` 限定某维度的开放范围（如 `"phase": ["小学"]`），范围外的取值在
-下拉里显示为"暂未开放"且不可选；若某维度只开放了一个取值，界面首次进入会
-自动替用户选中它（由 `DEFAULT_FILTERS` 派生），避免首屏就是几千条混杂结果。
+`SUPPORTED_SCOPE` 限定某维度的开放范围（默认 phase 全开放），若把范围收窄，
+范围外的取值会在下拉里显示为"暂未开放"且不可选；若某维度只开放了一个取值，
+界面首次进入会自动替用户选中它（由 `DEFAULT_FILTERS` 派生）。
 
 > 命令行（CLI）不受 `PUB_GROUPS` / `SUPPORTED_SCOPE` 限制，`--publisher` 可直接传任意版本标签。
 

@@ -287,9 +287,9 @@
       <button id="btn-reload-catalog" class="ghost small-btn h2-right">刷新目录</button>
     </h2>
     <div class="scope-note">
-      当前启用版本：<b>人教系列</b>（人教版 / 统编版 / 人教鄂教版）与 <b>沪教版</b>；其余版本已隐藏。
-      版本下拉中点<b>「人教版系（整套）」</b>可一次涵盖人教全部主科，也可在分组内精确选单个版本
-      （平台把语文标成"统编版"、数学标成"人教版"，两者都属人教）。学段暂只开放<b>小学</b>。
+      学段已开放<b>小学 / 初中 / 高中 / 特殊教育</b>全部范围；版本常用分组为<b>人教系列</b>
+      （人教版 / 统编版 / 人教鄂教版）与 <b>沪教版</b>，点「人教版系（整套）」可一次涵盖人教全部主科，
+      其余版本标签也已在下拉中按结果数列出可选。
     </div>
     <div class="row" style="margin-top:2px">
       <label data-dim="phase">学段 <select id="f-phase"></select></label>
@@ -1388,6 +1388,65 @@
     bar.appendChild(btnClose);
   }
 
+  // 检查更新结果弹窗：明确告知是否最新；发现新版时提供「立即下载更新」与
+  // 「查看发布页」入口。latest 为 /api/update-check 的 latest 对象（null=已最新）。
+  function showUpdateModal(latest) {
+    var old = document.getElementById('update-modal');
+    if (old) old.remove();
+    var overlay = document.createElement('div');
+    overlay.id = 'update-modal';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(30,20,10,.45);' +
+      'z-index:9999;display:flex;align-items:center;justify-content:center';
+    var box = document.createElement('div');
+    box.style.cssText = 'background:#fffdf8;border:1px solid #b23a2e;border-radius:10px;' +
+      'max-width:420px;width:88%;padding:22px 26px;box-shadow:0 10px 34px rgba(0,0,0,.28);' +
+      'font-size:14px;color:#3a2a20;line-height:1.6';
+    var cur = (document.getElementById('app-ver') || {}).textContent || '';
+    if (!latest) {
+      box.innerHTML = '<div style="font-size:16px;font-weight:600;color:#b23a2e;margin-bottom:8px">✓ 已是最新版本</div>' +
+        '<div>当前版本 ' + escapeHtml(cur || '') + ' 已是最新，无需更新。</div>';
+    } else {
+      var size = latest.asset_size ? '（约 ' + (latest.asset_size / 1048576).toFixed(1) + ' MB）' : '';
+      box.innerHTML = '<div style="font-size:16px;font-weight:600;color:#b23a2e;margin-bottom:8px">发现新版本 v' +
+        escapeHtml(latest.latest) + '</div>' +
+        '<div>当前版本 ' + escapeHtml(cur) + ' → 最新版本 <b>v' + escapeHtml(latest.latest) + '</b>' + size +
+        '。建议更新以获得最新修复与功能。</div>';
+    }
+    var row = document.createElement('div');
+    row.style.cssText = 'margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end';
+    function mkBtn(text, primary) {
+      var b = document.createElement('button');
+      b.textContent = text;
+      b.style.cssText = 'padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px;' +
+        (primary ? 'background:#b23a2e;color:#fff;border:1px solid #b23a2e;'
+                 : 'background:#fff;color:#666;border:1px solid #ccc;');
+      return b;
+    }
+    var btnClose = mkBtn('关闭');
+    btnClose.onclick = function () { overlay.remove(); };
+    row.appendChild(btnClose);
+    if (latest) {
+      var btnView = mkBtn('查看发布页');
+      btnView.onclick = function () {
+        fetch('/api/open', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ target: latest.html_url, mode: 'url' }) })
+          .catch(function () { window.open(latest.html_url, '_blank'); });
+        overlay.remove();
+      };
+      row.insertBefore(btnView, btnClose);
+      var btnDl = mkBtn('立即下载更新', true);
+      btnDl.onclick = function () {
+        startDownload(btnDl);
+        pollStatus(function (s) { paintButton(btnDl, s); });
+      };
+      row.insertBefore(btnDl, btnView);
+    }
+    box.appendChild(row);
+    overlay.appendChild(box);
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+  }
+
   // 手动检查更新入口：footer 版本号旁加一个「检查更新」小按钮
   var ver = document.getElementById('app-ver');
   if (ver && ver.parentElement) {
@@ -1403,12 +1462,14 @@
         .then(function (d) {
           chk.disabled = false;
           chk.textContent = '检查更新';
-          var bar = document.getElementById('update-banner');
           if (d && d.latest) {
+            // 弹窗明确反馈 + 保留横幅（关掉弹窗后仍可从横幅进入更新）
+            var bar = document.getElementById('update-banner');
             if (bar) addAutoUpdateButton(bar);
             else makeBanner(d.latest);
+            showUpdateModal(d.latest);
           } else {
-            showNote('当前已是最新版本');
+            showUpdateModal(null);
           }
         })
         .catch(function () {

@@ -444,16 +444,17 @@ DIM_ALIASES = {"grade": GRADE_ALIASES}
 
 ENABLED_DIMS = ("phase", "grade", "subject", "publisher", "volume")
 
-# 当前完整支持的筛选范围。phase 范围外的取值作为占位项禁用；版本维度用「可见分组」
-# 模型，后端只返回可见分组，故 publisher 无需在此列（其余版本一律隐藏）。
-# 以后要启用其它版本/学段，往 PUB_GROUPS / SUPPORTED_SCOPE 加即可。CLI 与 GUI 共用。
+# 当前完整支持的筛选范围。phase 覆盖平台全部基础教育学段（含特殊教育，用户可按需
+# 过滤）；版本维度用「可见分组」模型，但 SHOW_ALL_PUBLISHERS 开启后未分组标签也
+# 会被列出（见下）。以后要启用其它版本/学段，往 PUB_GROUPS / SUPPORTED_SCOPE 加即可。
+# CLI 与 GUI 共用。
 
 SUPPORTED_SCOPE = {
-    "phase": ["小学"],
+    "phase": ["小学", "初中", "高中", "特殊教育"],
 }
 # 默认筛选：某维度限定范围且只剩一个可选值时，进入界面就替用户选中。
-# 否则首屏是"全部学段"下几千条混杂结果，而其它学段又因禁选而点不动，
-# 用户得自己先想明白"原来只开了小学"。
+# 学段全开放后各学段均可自由切换，无需预选（此值为空字典，首屏按认知顺序
+# 展示全部学段，小学排在最前）。
 
 DEFAULT_FILTERS = {d: v[0] for d, v in SUPPORTED_SCOPE.items() if len(v) == 1}
 
@@ -473,6 +474,13 @@ PUB_GROUP_LABELS = {
 # 版本排序权重：按 PUB_GROUPS 的声明顺序展开，未知版本排最后
 
 PUB_ORDER = [tag for tags in PUB_GROUPS.values() for tag in tags]
+
+# 未分组版本的可见性：开启后，不属于任何 PUB_GROUPS 的真实版本标签也作为
+# 顶层选项列出（按结果数排序）。开放初/高中后教材版本众多（北师大、苏教、
+# 外研……），若仍按白名单隐藏会导致大量教材在版本筛选里"消失"，故默认放开；
+# 分组仅作为常用版本的"整套选"快捷入口保留。
+
+SHOW_ALL_PUBLISHERS = True
 # 科目排序权重：主科在前，符合"先找主科"的检索习惯
 
 SUBJECT_ORDER = ["语文", "数学", "英语", "道德与法治", "科学", "体育与健康",
@@ -487,10 +495,15 @@ DIM_ORDERS["publisher"] = PUB_ORDER
 
 
 def publisher_label(tag):
-    """真实 publisher 标签 -> 可见分组显示名；不在任何可见组的返回 None（应隐藏）。"""
+    """真实 publisher 标签 -> 可见分组显示名。
+
+    命中 PUB_GROUPS 返回分组名；未命中时 SHOW_ALL_PUBLISHERS 开启则返回标签
+    自身（顶层可见），关闭返回 None（隐藏）。"""
     for name, tags in PUB_GROUPS.items():
         if tag in tags:
             return name
+    if SHOW_ALL_PUBLISHERS:
+        return tag
     return None
 
 
@@ -525,11 +538,13 @@ def publisher_facets(raw_facets):
             counts[f["value"]] = counts.get(f["value"], 0) + f["count"]
 
     out = []
+    grouped = set()
     for name, tags in PUB_GROUPS.items():
         members = [t for t in tags if counts.get(t)]
         if not members:
             continue
         total = sum(counts[t] for t in members)
+        grouped.update(members)
         if len(members) > 1:
             group = PUB_GROUP_LABELS.get(name, name)
             out.append({"value": name, "count": total,
@@ -540,6 +555,13 @@ def publisher_facets(raw_facets):
         else:
             out.append({"value": members[0], "count": total,
                         "group": None, "is_group": False})
+
+    # 未分组的真实标签：按结果数降序补到顶层（SHOW_ALL_PUBLISHERS 开启时）
+    if SHOW_ALL_PUBLISHERS:
+        rest = sorted((t for t in counts if t not in grouped),
+                      key=lambda t: (-counts[t], t))
+        out.extend({"value": t, "count": counts[t],
+                    "group": None, "is_group": False} for t in rest)
     return out
 
 

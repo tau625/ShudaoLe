@@ -429,9 +429,12 @@ def run_token_fetch(trigger_content=DEFAULT_TRIGGER_CID, token_file=None,
         cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         creationflags=creationflags)
 
-    # 等待 CDP 端点就绪（读 /json/version 或 /json 列表）
+    # 等待 CDP 端点就绪（读 /json/version 或 /json 列表）。
+    # 浏览器进程退出不立即判死：启动加速/交接场景下 spawn 的根进程可能秒退而
+    # 调试端口仍由交接后的实例服务，给 3 秒观察期。
     deadline = time.time() + 30
     ws_url = None
+    exited_at = None
     while time.time() < deadline:
         if cancel_check and cancel_check():
             _kill(proc)
@@ -439,9 +442,10 @@ def run_token_fetch(trigger_content=DEFAULT_TRIGGER_CID, token_file=None,
             emit(p)
             return 7, p
         if proc.poll() is not None:
-            p = {"ok": False, "error": "浏览器进程意外退出，无法启动调试会话"}
-            emit(p)
-            return 5, p
+            if exited_at is None:
+                exited_at = time.time()
+            elif time.time() - exited_at > 3:
+                break  # 进程确实退了且端口始终未就绪
         try:
             with socket.create_connection(("127.0.0.1", debug_port), timeout=2):
                 pass
@@ -453,7 +457,9 @@ def run_token_fetch(trigger_content=DEFAULT_TRIGGER_CID, token_file=None,
         time.sleep(0.4)
 
     if not ws_url:
-        p = {"ok": False, "error": "等待浏览器调试接口超时"}
+        p = {"ok": False,
+             "error": ("浏览器进程意外退出，无法启动调试会话"
+                       if proc.poll() is not None else "等待浏览器调试接口超时")}
         emit(p)
         _kill(proc)
         return 5, p
@@ -504,6 +510,7 @@ def run_token_fetch(trigger_content=DEFAULT_TRIGGER_CID, token_file=None,
 
     while time.time() - started < timeout:
         if cancel_check and cancel_check():
+            # 用户放弃：走快速强杀（不做 Browser.close 等待），保证取消即时生效
             _kill(proc)
             p = {"ok": False, "error": "已放弃"}
             emit(p)
@@ -557,13 +564,13 @@ def run_token_fetch(trigger_content=DEFAULT_TRIGGER_CID, token_file=None,
         p = {"ok": True, "token": captured,
              "source": "自动捕获于 " + time.strftime("%H:%M:%S")}
         emit(p)
-        _kill(proc)
+        _shutdown_browser(debug_port, proc)
         return 0, p
 
     p = {"ok": False,
          "error": f"等待 {timeout} 秒仍未捕获到令牌（可能未登录或窗口被关闭）"}
     emit(p)
-    _kill(proc)
+    _shutdown_browser(debug_port, proc)
     return 3, p
 
 
@@ -630,6 +637,42 @@ def _fetch_ws_url(port):
         # OSError: 调试端口还没起来/连接断开；ValueError: 返回的不是合法 JSON
         _dbg(f"读取 CDP 端点失败: {e}")
         return None
+
+
+def _browser_ws(port):
+    """取浏览器级（browser-level）webSocketDebuggerUrl，用于 Browser.close 优雅关闭"""
+    import http.client
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=3)
+        conn.request("GET", "/json/version")
+        data = json.loads(conn.getresponse().read().decode("utf-8", "replace"))
+        conn.close()
+        return data.get("webSocketDebuggerUrl")
+    except (OSError, ValueError) as e:
+        _dbg(f"读取浏览器级调试端点失败: {e}")
+        return None
+
+
+def _shutdown_browser(debug_port, proc):
+    """抓取结束后的浏览器收尾：先走 CDP Browser.close 优雅关闭（窗口正常退出、
+    不留「未正常关闭」恢复提示），失败再强制杀进程树兜底。
+
+    为什么不只靠 taskkill：Edge/Chrome 在「启动加速/后台模式」等场景下，真实
+    浏览器进程树可能脱离我们 spawn 的根进程（启动后立即交接退出），taskkill /T
+    杀不到真正的窗口进程；CDP Browser.close 走调试协议，无论进程树归属如何
+    都能关掉窗口。"""
+    ws_url = _browser_ws(debug_port)
+    if ws_url:
+        try:
+            CDP(ws_url).send("Browser.close", timeout=5)
+        except (RuntimeError, TimeoutError, OSError) as e:
+            _dbg(f"Browser.close 失败: {e}")
+    # 等待进程退出（Browser.close 后 Chromium 通常 1 秒内退出）
+    for _ in range(6):
+        if proc is None or proc.poll() is not None:
+            return
+        time.sleep(0.5)
+    _kill(proc)  # 兜底：进程树未退出则强制终止
 
 
 def _kill(proc):
