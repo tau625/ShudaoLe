@@ -41,24 +41,24 @@ All doable in one patch release (v1.2.1) without touching the architecture.
 
 Goal: turn "three big single files + zero tests + zero gates" into a sustainable engineering structure. **Keep the Python 3.8 baseline** (already promised in README; use `from __future__ import annotations` throughout).
 
-- [ ] **P1-1 pyproject.toml + package split**
+- [x] **P1-1 pyproject.toml + package split**
   New package `shudaole/`: `catalog.py` (catalog fetch/normalization/cascading filters/constants), `download.py` (download core), `net.py` (Session/retry/URL validation), `cli.py`, `config.py` (config loading), `token.py` (current auto_fetch_token moves in), `gui/` (server + extracted static page).
   The old entry points `smartedu_downloader.py` / `smartedu_downloader_gui.py` remain as **thin shims** (forwarding to the package) — `python smartedu_downloader.py` usage and all docs stay unchanged.
   *Why*: in the 1806-line single file, constants sit at L1164-1211, `normalize_catalog` spans 127 lines, and `process_one` contains three duplicated download blocks — piling features on top only gets worse. *Outcome*: clear module boundaries; every future change has a controllable scope.
 
-- [ ] **P1-2 build.spec / CI adaptation for the split**
+- [x] **P1-2 build.spec / CI adaptation for the split**
   Adjust `hiddenimports` to package modules; add package data files to datas; add `cache: pip` to release.yml; add a post-split smoke-build job (guarantee PyInstaller collection completeness before tagging).
   *Why*: the biggest risk of splitting is PyInstaller missing modules — CI must catch it. *Outcome*: no more "works locally, missing modules after packaging".
 
-- [ ] **P1-3 Logging system (logging migration)**
+- [x] **P1-3 Logging system (logging migration)**
   Core uses `logging.getLogger("shudaole")` uniformly; the GUI keeps the existing `on_log` callback facade — add a custom Handler that feeds log records into the UI log buffer, achieving a seamless migration.
   *Why*: prints/callbacks are scattered; no levels, timestamps, or dedup possible. *Outcome*: level-based filtering; GUI logs and CLI logs share one source.
 
-- [ ] **P1-4 pytest foundation**
+- [x] **P1-4 pytest foundation**
   First round covers pure functions: `normalize_title` / `build_filename` / `parse_content_id` / `normalize_catalog` / cascading filters / `validate_public_http_url` (target ≥90% branch coverage); network layer mocked with `requests-mock` for catalog/detail/PDF (including 401, Range 206, retry paths). Overall target: 60% first, 75-80% when stable.
   *Why*: the naming/filtering logic is this project's most complex and regression-prone part — and the most test-worthy. *Outcome*: safe to touch the download core in P2.
 
-- [ ] **P1-5 CI quality gate (ci.yml)**
+- [x] **P1-5 CI quality gate (ci.yml)**
   New workflow: triggered on push/PR, matrix Python 3.8/3.10/3.12, `setup-python` with `cache: pip`, steps ruff (lint + format check) → mypy (lenient at first, tighten gradually) → pytest --cov.
   *Why*: gates belong in the daily flow, not the release flow — problems get caught at commit time. *Outcome*: sustainable quality, even with multiple contributors.
 

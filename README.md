@@ -32,16 +32,28 @@ https://github.com/user-attachments/assets/2e59032c-0cc7-4e00-802e-52b620c795b5
 
 ```
 smartedu-教材下载器/
-├── smartedu_downloader.py        # 命令行核心（解析/下载/重试/目录检索）
-├── smartedu_downloader_gui.py    # 网页界面服务（本地 127.0.0.1，自动开浏览器）
-├── smartedu_webui.html           # 网页界面（被 gui 读取，必须与脚本同目录）
-├── auto_fetch_token.py           # 一键获取登录令牌（纯 Python，进程内整合，零依赖）
+├── shudaole/                     # 核心包（P1-1 起实现拆分于此）
+│   ├── cli.py                    #   命令行入口（参数解析/批量流程）
+│   ├── catalog.py                #   教材目录（抓取/规范化/级联筛选）
+│   ├── download.py               #   下载内核（详情/重试/令牌管理）
+│   ├── naming.py                 #   命名与链接解析（纯函数）
+│   ├── net.py                    #   Session 构造与 SSRF 校验
+│   ├── config.py                 #   配置路径（令牌/缓存位置）
+│   ├── logutil.py                #   日志设施（CLI/GUI 同源）
+│   ├── token.py                  #   一键获取登录令牌（纯 Python，零依赖）
+│   └── gui/                      #   本地网页界面服务（127.0.0.1）
+├── smartedu_downloader.py        # thin shim → shudaole.cli（用法不变）
+├── smartedu_downloader_gui.py    # thin shim → shudaole.gui（用法不变）
+├── smartedu_webui.html           # 网页界面（被 gui 读取，位于仓库根目录）
+├── auto_fetch_token.py           # thin shim → shudaole.token（用法不变）
+├── tests/                        # pytest 测试（纯函数 + requests-mock）
 ├── make_icon.py                  # 生成 app.ico 图标（纯标准库，无需 Pillow）
 ├── app.ico                       # 程序图标（由 make_icon.py 生成）
 ├── version_info.txt              # Windows 版本资源（打包时写入 exe 文件属性）
 ├── build.spec                    # PyInstaller 打包配置（onedir 模式）
 ├── build.bat                     # 一键打包入口（双击即可重新出 exe + zip）
 ├── build.py                      # 打包逻辑本体（清理/图标/PyInstaller/打 zip，三平台可运行）
+├── pyproject.toml                # 包元数据与工具配置（ruff/mypy/pytest）
 ├── requirements.txt              # Python 依赖
 ├── links.example.txt             # 批量链接输入示例
 └── README.md                     # 本文件

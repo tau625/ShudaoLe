@@ -28,6 +28,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: "pip"  # P1-2：缓存 pip 下载，缩短构建时间
 
       - name: Install dependencies
         run: |

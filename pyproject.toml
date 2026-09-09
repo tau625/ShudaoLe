@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "shudaole"
+# 注意：发版仍以 version_info.txt 为版本号单一来源（exe 属性与界面都从它解析）；
+# 此字段仅用于源码安装（pip install .）时的元数据，发版时顺手同步即可。
+version = "1.2.1"
+description = "书到了 ShudaoLe — 国家中小学智慧教育平台教材 PDF 下载工具"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "PolyForm Noncommercial 1.0.0" }
+authors = [{ name = "tau625" }]
+keywords = ["smartedu", "textbook", "downloader", "education"]
+dependencies = ["requests>=2.25"]
+
+[project.optional-dependencies]
+progress = ["tqdm"]
+dev = [
+    "pytest>=7",
+    "pytest-cov",
+    "requests-mock",
+    "ruff>=0.4",
+    "mypy>=1.0",
+]
+
+[project.scripts]
+shudaole = "shudaole.cli:main"
+
+[tool.setuptools]
+packages = ["shudaole", "shudaole.gui"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py38"
+
+[tool.ruff.lint]
+# 渐进收敛：门禁先只挡语法错误(E9)与 pyflakes(F)，风格类规则后续逐批放开
+select = ["E9", "F"]
+
+[tool.mypy]
+ignore_missing_imports = true
+# 宽松起步：先只查核心纯函数模块，逐步扩展（见 ROADMAP P1-5）
+files = ["shudaole/errors.py", "shudaole/config.py"]

@@ -35,3 +35,8 @@ Thumbs.db
 video/
 *.mp4
 *.mov
+
+# 测试/质量工具产物
+.coverage
+htmlcov/
+.pytest_cache/

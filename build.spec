@@ -11,7 +11,7 @@
 #   - onedir（非 onefile）：启动不涉及"自解压到临时目录"，大幅降低杀软误报，
 #     且启动更快。分发时把整个 dist/书到了 文件夹打成 zip 即可。
 #   - 无控制台窗口（console=False）：双击不会弹出黑窗
-#   - 令牌抓取已整合进 GUI 进程内（import auto_fetch_token 模块），随 exe 自动收集，
+#   - 令牌抓取已整合进 GUI 进程内（shudaole.token 模块），随 exe 自动收集，
 #     对方机器无需安装 Python，真正零依赖。
 #   - 隐藏导入 requests/urllib3，确保 requests 被完整收集
 #   - icon：app.ico（由 make_icon.py 生成）

@@ -41,24 +41,24 @@
 
 目标：把「三个大单文件 + 零测试 + 零门禁」变成可持续演进的工程结构。**维持 Python 3.8 基线**（README 已承诺；统一 `from __future__ import annotations`）。
 
-- [ ] **P1-1 pyproject.toml + 包结构拆分**
+- [x] **P1-1 pyproject.toml + 包结构拆分**
   新建包 `shudaole/`：`catalog.py`（目录抓取/规范化/级联筛选/常量）、`download.py`（下载核心）、`net.py`（Session/重试/URL 校验）、`cli.py`、`config.py`（配置加载）、`token.py`（现 auto_fetch_token 迁入）、`gui/`（服务 + 静态页拆出）。
   旧入口 `smartedu_downloader.py` / `smartedu_downloader_gui.py` 保留为 **thin shim**（转发到包入口）——`python smartedu_downloader.py` 用法与全部文档零改动。
   *理由*：1806 行单文件的常量分散在 L1164-1211、`normalize_catalog` 127 行、`process_one` 内三段重复下载逻辑，继续堆功能只会更糟。*效果*：模块边界清晰，后续每一项改造的作用域可控。
 
-- [ ] **P1-2 build.spec / CI 适配拆包**
+- [x] **P1-2 build.spec / CI 适配拆包**
   `hiddenimports` 调整为包内模块；datas 追加包内数据文件；release.yml 加 `cache: pip`；新增「拆包后冒烟构建」job（tag 前保证 PyInstaller 收集完整）。
   *理由*：拆包最大风险就是 PyInstaller 漏收集，必须在 CI 层兜住。*效果*：发版永远不会再出「本地好好的、打包后缺模块」。
 
-- [ ] **P1-3 日志系统（logging 迁移）**
+- [x] **P1-3 日志系统（logging 迁移）**
   核心统一 `logging.getLogger("shudaole")`；GUI 侧保留现有 `on_log` 回调门面——加一个自定义 Handler 把日志写进界面日志缓冲，实现无感迁移。
   *理由*：print/回调散落各处，级别、时间戳、去重都做不了。*效果*：可按级别过滤，GUI 日志与 CLI 日志同源。
 
-- [ ] **P1-4 pytest 测试地基**
+- [x] **P1-4 pytest 测试地基**
   首轮覆盖纯函数：`normalize_title` / `build_filename` / `parse_content_id` / `normalize_catalog` / 级联筛选 / `validate_public_http_url`（目标 ≥90% 分支覆盖）；网络层用 `requests-mock` 模拟目录/详情/PDF（含 401、Range 206、重试路径）。整体目标：首轮 60%，稳定后 75-80%。
   *理由*：命名/筛选逻辑是本项目最复杂、最易回归的部分，也是最值得测的部分。*效果*：P2 动下载内核时敢下手。
 
-- [ ] **P1-5 CI 质量门禁（ci.yml）**
+- [x] **P1-5 CI 质量门禁（ci.yml）**
   新开 workflow：push/PR 触发，矩阵 Python 3.8/3.10/3.12，`setup-python` 带 `cache: pip`，步骤 ruff（lint+format 检查）→ mypy（宽松起步，逐步收紧）→ pytest --cov。
   *理由*：门禁放在日常流而不是发版流，问题在提交时就拦住。*效果*：代码质量可持续，三人协作也不怕。
 
