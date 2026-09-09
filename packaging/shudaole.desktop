@@ -1,6 +1,7 @@
 # 书到了 · Linux 桌面快捷方式模板
-# 用法：解压 tar.gz 后，把本文件复制到 ~/.local/share/applications/ 并把下方
-# /opt/shudaole 改成实际的「书到了」目录绝对路径，然后即可在应用菜单启动。
+# 安装 .deb 包时此文件由包自动装到 /usr/share/applications/（Exec/Icon 已配好，
+# 指向 /opt/shudaole），无需手动操作。使用 tar.gz 绿色版时：把本文件复制到
+# ~/.local/share/applications/，并把 Exec 改成实际解压路径。
 [Desktop Entry]
 Type=Application
 Version=1.0
@@ -8,10 +9,10 @@ Name=书到了
 Name[en]=ShudaoLe
 Comment=国家中小学智慧教育平台教材 PDF 下载
 Comment[en]=Textbook downloader for China's Smart Education platform
-# ↓ 改为你解压后的实际路径
+# deb 安装后的固定路径；tar.gz 用户请改成实际解压路径
 Exec=/opt/shudaole/书到了
-# 若把图标 png 放到了固定位置可取消下行注释（tar 包内不带图标文件）
-# Icon=/opt/shudaole/icon.png
+# deb 包自带系统图标；tar.gz 用户可取消注释并指向本地 png
+# Icon=/opt/shudaole/app.png
 Terminal=false
 Categories=Education;Utility;
 Keywords=教材;下载;ShudaoLe;textbook;

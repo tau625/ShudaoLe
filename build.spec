@@ -22,6 +22,7 @@ import sys
 # version 文件与 icon 仅在 Windows 上生效；macOS/Linux 构建时由 CI 传 None，
 # 保证同一份 spec 三平台都能跑
 IS_WIN = sys.platform.startswith("win")
+IS_MAC = sys.platform == "darwin"
 
 # 收集版本信息文件（打包时由 build.bat 先生成 version_info.txt，这里引用）
 _vi = None
@@ -109,3 +110,13 @@ coll = COLLECT(
     upx_exclude=[],
     name='书到了',
 )
+
+# macOS：把 COLLECT 产物包成原生 .app（Finder 双击启动、Dock 图标、无终端窗口），
+# CI 再用 hdiutil 打成 .dmg 分发。仅在 macOS 构建时生效。
+if IS_MAC:
+    bundle = BUNDLE(
+        coll,
+        name='书到了',
+        icon='assets/app.icns',
+        bundle_identifier='cn.tau625.shudaole',
+    )

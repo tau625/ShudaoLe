@@ -85,13 +85,49 @@ jobs:
           version="${GITHUB_REF_NAME#v}"
           tar -C dist -czf "ShudaoLe-${version}-linux-x64.tar.gz" "书到了"
 
+      - name: Package .deb (linux, Debian/Ubuntu)
+        if: matrix.platform == 'linux'
+        shell: bash
+        run: |
+          set -e
+          version="${GITHUB_REF_NAME#v}"
+          # 原生 deb 包：/opt/shudaole 程序本体 + 应用菜单入口 + 图标
+          pkg="pack_deb/shudaole_${version}_amd64"
+          mkdir -p "$pkg/DEBIAN" "$pkg/opt/shudaole" \
+            "$pkg/usr/share/applications" \
+            "$pkg/usr/share/icons/hicolor/256x256/apps"
+          cp -a "dist/书到了/." "$pkg/opt/shudaole/"
+          cat > "$pkg/DEBIAN/control" <<CTL
+          Package: shudaole
+          Version: ${version}
+          Architecture: amd64
+          Maintainer: tau625 <tau625@users.noreply.github.com>
+          Depends: libc6 (>= 2.35)
+          Recommends: zenity
+          Section: education
+          Priority: optional
+          Description: 书到了 (ShudaoLe) - 国家中小学智慧教育平台教材 PDF 下载
+           本地网页界面，一键按学段/年级/科目/版本筛选并批量下载官方教材 PDF。
+          CTL
+          # 应用菜单入口（模板 Exec 路径与包内安装路径一致）
+          cp packaging/shudaole.desktop "$pkg/usr/share/applications/shudaole.desktop"
+          cp assets/app.png "$pkg/usr/share/icons/hicolor/256x256/apps/shudaole.png"
+          chmod +x "$pkg/opt/shudaole/书到了"
+          dpkg-deb --build --root-owner-group "$pkg"
+          mv "pack_deb/shudaole_${version}_amd64.deb" "ShudaoLe-${version}-linux-x64.deb"
+
       - name: Package (macos)
         if: matrix.platform == 'macos'
         shell: bash
         run: |
-          # 用 Python zipfile 打包：非 ASCII 文件名会正确写入 UTF-8 标志
-          # （Info-ZIP 默认不设标志，Windows 侧解压会得到乱码目录名）
-          python -c "import shutil; print(shutil.make_archive('ShudaoLe-${GITHUB_REF_NAME#v}-macos', 'zip', 'dist', '书到了'))"
+          # PyInstaller BUNDLE 已产出原生 书到了.app（dist 下）；
+          # 用 hdiutil 打成 .dmg 分发——用户打开后拖进 Applications 即完成安装
+          set -e
+          test -d "dist/书到了.app" || { echo "未找到 书到了.app"; ls dist; exit 1; }
+          version="${GITHUB_REF_NAME#v}"
+          hdiutil create -volname "ShudaoLe ${version}" \
+            -srcfolder "dist/书到了.app" -format UDZO \
+            -ov "ShudaoLe-${version}-macos.dmg"
 
       - name: Attach to release
         uses: softprops/action-gh-release@v2

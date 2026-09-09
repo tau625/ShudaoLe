@@ -20,8 +20,8 @@ https://github.com/user-attachments/assets/2e59032c-0cc7-4e00-802e-52b620c795b5
 | 平台 | 方式 |
 |---|---|
 | Windows（推荐） | 从 [Releases](https://github.com/tau625/ShudaoLe/releases/latest) 下载 `ShudaoLe-X.Y.Z-setup.exe` 安装版（简体中文向导、开始菜单/桌面快捷方式、标准卸载器）；绿色版取 `ShudaoLe-X.Y.Z-windows-x64.zip`，解压后双击 `书到了.exe` |
-| macOS（Apple Silicon） | 下载 `ShudaoLe-X.Y.Z-macos.zip`，解压后在终端执行 `xattr -cr 书到了`（去除隔离属性）再 `./书到了` |
-| Linux（x64，glibc ≥ 2.35） | 下载 `ShudaoLe-X.Y.Z-linux-x64.tar.gz`，解压后 `chmod +x 书到了 && ./书到了` |
+| macOS（Apple Silicon） | 下载 `ShudaoLe-X.Y.Z-macos.dmg`，打开后把「书到了」拖进 Applications（未签名，首次运行需右键打开或终端执行 `xattr -cr /Applications/书到了.app`） |
+| Linux（x64，glibc ≥ 2.35） | Debian/Ubuntu 下载 `ShudaoLe-X.Y.Z-linux-x64.deb` 双击安装（自动进应用菜单，程序位于 /opt/shudaole）；其他发行版取 `ShudaoLe-X.Y.Z-linux-x64.tar.gz`，解压后 `chmod +x 书到了 && ./书到了` |
 | 任意平台（源码运行） | 克隆本仓库 → `pip install -r requirements.txt` → `python smartedu_downloader_gui.py`（网页界面）或 `python smartedu_downloader.py`（命令行） |
 
 > 非 Windows 平台说明：「一键获取令牌」已支持三平台（自动探测系统 Edge/Chrome）；
@@ -365,7 +365,7 @@ PowerShell `Remove-Item` 重定向到回收站工具。该工具遇到**中文�
 - 只动构建配置、不动程序代码的修复，**直接移动未发成功的 tag 重跑**
   （删远端 tag → 重打 → 推），不必 bump 版本号；删 tag 不会删掉 Release 对象。
 - 重跑后记得用 `gh api repos/tau625/ShudaoLe/releases/tags/vX.Y.Z` 核对附件
-  是否四件齐（setup.exe / windows zip / macos zip / linux tar.gz）。
+  是否五件齐（setup.exe / windows zip / macos dmg / linux deb / linux tar.gz），外加 SHA256SUMS.txt。
 
 ## 版本与发布规范
 

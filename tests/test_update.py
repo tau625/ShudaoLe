@@ -22,7 +22,9 @@ def test_platform_key_is_one_of_three(monkeypatch):
 ASSETS = [
     "ShudaoLe-1.3.5-setup.exe",
     "ShudaoLe-1.3.5-windows-x64.zip",
+    "ShudaoLe-1.3.5-macos.dmg",
     "ShudaoLe-1.3.5-macos.zip",
+    "ShudaoLe-1.3.5-linux-x64.deb",
     "ShudaoLe-1.3.5-linux-x64.tar.gz",
     "SHA256SUMS.txt",
 ]
@@ -37,10 +39,20 @@ def test_pick_asset_windows_prefers_installer(monkeypatch):
 
 
 def test_pick_asset_mac_linux(monkeypatch):
+    # mac/linux 原生安装包优先（dmg / deb）
     monkeypatch.setattr(upd, "platform_key", lambda: "macos")
-    assert upd.pick_asset(ASSETS) == "ShudaoLe-1.3.5-macos.zip"
+    assert upd.pick_asset(ASSETS) == "ShudaoLe-1.3.5-macos.dmg"
     monkeypatch.setattr(upd, "platform_key", lambda: "linux")
-    assert upd.pick_asset(ASSETS) == "ShudaoLe-1.3.5-linux-x64.tar.gz"
+    assert upd.pick_asset(ASSETS) == "ShudaoLe-1.3.5-linux-x64.deb"
+
+
+def test_pick_asset_fallback_to_archive(monkeypatch):
+    # 没有原生包时回退压缩包（macos.zip / linux tar.gz）
+    archives = ["ShudaoLe-1.3.5-macos.zip", "ShudaoLe-1.3.5-linux-x64.tar.gz"]
+    monkeypatch.setattr(upd, "platform_key", lambda: "macos")
+    assert upd.pick_asset(archives) == "ShudaoLe-1.3.5-macos.zip"
+    monkeypatch.setattr(upd, "platform_key", lambda: "linux")
+    assert upd.pick_asset(archives) == "ShudaoLe-1.3.5-linux-x64.tar.gz"
 
 
 def test_pick_asset_missing_returns_none(monkeypatch):

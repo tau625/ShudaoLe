@@ -60,10 +60,12 @@ def platform_key():
 
 
 def pick_asset(names):
-    """按平台从附件文件名列表里挑更新包。
+    """按平台从附件文件名列表里挑更新包（原生安装包优先）。
 
     windows 优先安装器（-setup.exe，可静默安装），没有则退回 windows-x64.zip；
-    macos 取 -macos.zip；linux 取 -linux-x64.tar.gz。找不到返回 None。
+    macos 优先 -macos.dmg（内含 .app），退回 -macos.zip；
+    linux 优先 -linux-x64.deb（Debian/Ubuntu 双击即装），退回 tar.gz。
+    找不到返回 None。
     """
     names = [n for n in names if n]
     if platform_key() == "windows":
@@ -74,9 +76,15 @@ def pick_asset(names):
             if "windows-x64" in n and n.endswith(".zip"):
                 return n
         return None
-    want = "-macos.zip" if platform_key() == "macos" else "-linux-x64.tar.gz"
+    if platform_key() == "macos":
+        prefer, fallback = "-macos.dmg", "-macos.zip"
+    else:
+        prefer, fallback = "-linux-x64.deb", "-linux-x64.tar.gz"
     for n in names:
-        if n.endswith(want):
+        if n.endswith(prefer):
+            return n
+    for n in names:
+        if n.endswith(fallback):
             return n
     return None
 
