@@ -5,8 +5,8 @@
 #
 VSVersionInfo(
   ffi=FixedFileInfo(
-    filevers=(1, 2, 0, 0),
-    prodvers=(1, 2, 0, 0),
+    filevers=(1, 2, 1, 0),
+    prodvers=(1, 2, 1, 0),
     mask=0x3f,
     flags=0x0,
     OS=0x40004,
@@ -21,12 +21,12 @@ VSVersionInfo(
         u'040904b0',
         [StringStruct(u'CompanyName', u'ShudaoLe'),
         StringStruct(u'FileDescription', u'ShudaoLe (Book Arrived) - Textbook Downloader'),
-        StringStruct(u'FileVersion', u'1.2.0'),
+        StringStruct(u'FileVersion', u'1.2.1'),
         StringStruct(u'InternalName', u'ShudaoLe'),
         StringStruct(u'LegalCopyright', u'Personal use only'),
         StringStruct(u'OriginalFilename', u'ShudaoLe.exe'),
         StringStruct(u'ProductName', u'ShudaoLe (Book Arrived)'),
-        StringStruct(u'ProductVersion', u'1.2.0')])
+        StringStruct(u'ProductVersion', u'1.2.1')])
       ])
     ,
     VarFileInfo([VarStruct(u'Translation', [1033, 1200])])

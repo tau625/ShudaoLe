@@ -12,26 +12,26 @@ This roadmap is based on a full code review of v1.2.0 (Sep 2026), ordered by pri
 
 All doable in one patch release (v1.2.1) without touching the architecture.
 
-- [ ] **P0-1 Fix browser-profile directory naming leak**
+- [x] **P0-1 Fix browser-profile directory naming leak**
   `auto_fetch_token.py:279-281` hardcodes the dedicated browser profile to `~/.workbuddy/smartedu-token-profile` — `.workbuddy` is the AI-tool directory name from the dev machine, and it gets created as an unexplained hidden directory on **end-user machines**.
   Change to `~/.config/shudaole/token-profile` (on Windows, `%USERPROFILE%\.config\shudaole\` works fine — no registry needed).
   *Why*: brand consistency + no inexplicable directories left on user machines. *Outcome*: clean, predictable user-machine layout.
   *Migration*: if the old path exists at startup, silently move it or simply abandon it (one re-login restores the session).
 
-- [ ] **P0-2 Atomic catalog-cache writes**
+- [x] **P0-2 Atomic catalog-cache writes**
   `smartedu_downloader.py:811-820` calls `write_text` directly — an interrupted process leaves a truncated JSON; and `except OSError: pass` swallows the error silently.
   Change to "write `.tmp` → `os.replace()`" atomic replacement; log failures.
   *Why*: a corrupt cache only triggers a re-download, but truncated files plus silent failure are bad hygiene — a one-line-cost fix. *Outcome*: cache is never half-written; failures are visible.
 
-- [ ] **P0-3 WebSocket continuation-frame support**
+- [x] **P0-3 WebSocket continuation-frame support**
   The `_WS.recv` in `auto_fetch_token.py` does not handle `OP_CONTINUATION` (opcode 0x0) fragmentation, so long CDP messages (e.g. large Network events) can be truncated, causing sporadic token-capture misses.
   *Why*: a protocol-correctness bug, not an optimization. *Outcome*: token capture is stable on complex pages.
 
-- [ ] **P0-4 Token storage location & permissions**
+- [x] **P0-4 Token storage location & permissions**
   `token.txt` is currently written next to the script/exe, in plaintext. Prefer the user config directory (`~/.config/shudaole/token.txt`), `chmod 600` on POSIX; the old same-directory file stays readable for compatibility.
   *Why*: the script directory may be synced or shared — plaintext credentials should not travel with the project. *Outcome*: a smaller credential-exposure surface.
 
-- [ ] **P0-5 Narrow bare `except`s**
+- [x] **P0-5 Narrow bare `except`s**
   Several `except Exception: pass` blocks in `auto_fetch_token.py` discard exception context. Catch specific exceptions and log them (to stderr at minimum).
   *Why*: silent failure is the most expensive kind to debug. *Outcome*: failures become diagnosable.
 

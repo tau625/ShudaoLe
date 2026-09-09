@@ -47,7 +47,7 @@ from smartedu_downloader import (  # noqa: E402
     DIM_LABELS, FILTER_DIMS, ENABLED_DIMS, AuthContext, CancelledError,
     catalog_facets, fetch_catalog_index, initial_token, process_one,
     search_catalog, publisher_facets, relax_suggestions,
-    PUB_GROUPS, SUPPORTED_SCOPE, DEFAULT_FILTERS,
+    PUB_GROUPS, SUPPORTED_SCOPE, DEFAULT_FILTERS, TOKEN_FILE,
 )
 import auto_fetch_token  # noqa: E402  一键令牌抓取（进程内调用，随 exe 打包零依赖）
 
@@ -135,7 +135,9 @@ def _auto_token_worker():
     try:
         auto_fetch_token.run_token_fetch(
             trigger_content=_pick_trigger_cid(),
-            token_file=str(BASE_DIR / "token.txt"),
+            # 落盘位置由 smartedu_downloader 决定（用户配置目录，见 TOKEN_FILE）；
+            # 这里只把程序目录作为兜底目录传进去（配置目录不可写时用它）。
+            token_file=str(TOKEN_FILE),
             timeout=180,
             login_url=os.environ.get("SMARTEDU_AUTO_URL", "").strip(),
             emit=emit,

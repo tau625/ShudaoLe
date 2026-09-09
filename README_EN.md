@@ -130,7 +130,7 @@ The platform requires login for PDF downloads; anonymous requests usually get a 
 
 1. **"One-click auto token fetch" in the web UI** (opens a browser automatically; sign in once — no Node.js needed)
 2. Manual copy: log in on the platform → F12 → **Network** → filter `pdf` → click a `pdf` request → copy the full `x-nd-auth` value from **Request Headers**
-3. Save the token to `token.txt` next to the script (the tool reuses it automatically)
+3. Save the token to `token.txt` — the tool prefers the user config directory (`~/.config/shudaole/token.txt`, on Windows `%USERPROFILE%\.config\shudaole\token.txt`) and reuses it automatically; **a `token.txt` sitting next to the program (as in older versions) is still read**, so no manual migration is needed
 
 ## II. Command line
 

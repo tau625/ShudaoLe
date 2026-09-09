@@ -123,7 +123,7 @@ python smartedu_downloader_gui.py --no-browser   # 不自动打开浏览器，�
 
 1. **网页界面内「一键自动获取令牌」**（自动打开浏览器，登录一次即可，无需 Node.js）
 2. 手动复制：浏览器登录平台 → F12 → **Network** → 过滤 `pdf` → 点某个 `pdf` 请求 → 在 **Request Headers** 里复制 `x-nd-auth` 的完整值
-3. 把令牌写入脚本同目录的 `token.txt`（工具会自动复用）
+3. 把令牌写入 `token.txt`——优先用户配置目录（`~/.config/shudaole/token.txt`，Windows 为 `%USERPROFILE%\.config\shudaole\token.txt`），工具会自动复用；**旧版本放在程序同目录的 `token.txt` 仍会读取**，无需手动搬迁
 
 ## 二、命令行
 

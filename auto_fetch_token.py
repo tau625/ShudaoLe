@@ -51,12 +51,21 @@ TRIGGER_URL_TPL = (
 )
 
 
+def _dbg(msg):
+    """诊断日志：只在 stderr 存在时输出（windowed exe 下 sys.stderr 为 None）。"""
+    try:
+        if sys.stderr:
+            sys.stderr.write("[shudaole] " + str(msg) + "\n")
+    except Exception:
+        pass
+
+
 def _out(obj):
-    """向 stdout 输出一行 JSON（供 GUI 解析）；失败静默忽略（避免 EPIPE）"""
+    """向 stdout 输出一行 JSON（供 GUI 解析）；管道被关闭（EPIPE）时静默忽略"""
     try:
         sys.stdout.write(json.dumps(obj, ensure_ascii=False) + "\n")
         sys.stdout.flush()
-    except Exception:
+    except OSError:
         pass
 
 
@@ -90,6 +99,100 @@ def find_browser():
     for c in _edge_candidates():
         if c and os.path.exists(c):
             return c
+    return None
+
+
+# ============ 用户目录布局 ============
+def config_dir():
+    """用户级配置目录 ~/.config/shudaole/（Windows 下同样位于 %USERPROFILE%\\.config\\，
+    跨平台行为一致且不写注册表）。可用 SHUDAOLE_CONFIG_DIR 覆盖（测试/绿色版场景）。"""
+    override = os.environ.get("SHUDAOLE_CONFIG_DIR", "").strip()
+    if override:
+        return override
+    return os.path.join(os.path.expanduser("~"), ".config", "shudaole")
+
+
+def default_profile_dir():
+    """一键登录浏览器的独立 profile 目录。"""
+    return os.path.join(config_dir(), "token-profile")
+
+
+_LEGACY_PROFILE = os.path.join(
+    os.path.expanduser("~"), ".workbuddy", "smartedu-token-profile")
+
+
+def _migrate_profile():
+    """一次性迁移：把历史版本的 ~/.workbuddy/smartedu-token-profile 搬到新位置，
+    保留已有登录态（免得用户重登一次）。旧目录不存在、或新目录已就位、或搬迁
+    失败（权限/占用）都静默放行——失败只损失登录态，不影响功能。"""
+    legacy = _LEGACY_PROFILE
+    new = default_profile_dir()
+    if os.environ.get("AUTO_PROFILE"):
+        return  # 用户显式指定了目录，不掺和
+    if not os.path.isdir(legacy) or os.path.isdir(new):
+        return
+    try:
+        os.makedirs(os.path.dirname(new), exist_ok=True)
+        shutil.move(legacy, new)
+    except OSError as e:
+        print(f"[shudaole] 迁移浏览器登录目录失败（将重新登录一次）: {e}",
+              file=sys.stderr)
+
+
+# ============ 令牌落盘（统一读写口，供 CLI / GUI / 自动抓取共用） ============
+def token_save_path(base_dir=None):
+    """令牌文件写入路径：优先用户配置目录 ~/.config/shudaole/token.txt。
+
+    base_dir 仅用于兜底：配置目录不可写（极少见）时退回 base_dir/token.txt，
+    保持旧版行为。读取方（smartedu_downloader.initial_token）按
+    「配置目录 > 程序目录」顺序找，两处都能命中。
+    """
+    cfg = os.path.join(config_dir(), "token.txt")
+    try:
+        os.makedirs(config_dir(), exist_ok=True)
+        # 探测可写：直接原子创建一个 0 字节文件（已存在则无副作用）
+        with open(cfg, "a", encoding="utf-8"):
+            pass
+        return cfg
+    except OSError as e:
+        print(f"[shudaole] 配置目录不可用，令牌将存到程序目录: {e}", file=sys.stderr)
+        if base_dir:
+            return os.path.join(str(base_dir), "token.txt")
+        return cfg
+
+
+def write_token(token, base_dir=None):
+    """把令牌写入 token_save_path，POSIX 下收紧到属主可读写（600）。
+    返回实际写入路径；失败返回 None（不抛异常——令牌还能通过内存使用）。"""
+    path = token_save_path(base_dir)
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(token.strip() or "")
+        if os.name != "nt":
+            try:
+                os.chmod(path, 0o600)
+            except OSError:
+                pass
+        return path
+    except OSError as e:
+        print(f"[shudaole] 令牌落盘失败: {e}", file=sys.stderr)
+        return None
+
+
+def read_token(base_dir=None):
+    """读取已存令牌：配置目录优先，其次程序目录（历史位置）。
+    返回去除首尾空白的令牌字符串；没有则返回 None。"""
+    candidates = [os.path.join(config_dir(), "token.txt")]
+    if base_dir:
+        candidates.append(os.path.join(str(base_dir), "token.txt"))
+    for path in candidates:
+        try:
+            with open(path, "r", encoding="utf-8", errors="replace") as f:
+                t = f.read().strip()
+            if t:
+                return t
+        except OSError:
+            continue
     return None
 
 
@@ -135,7 +238,13 @@ class _WS:
         return data
 
     def recv(self):
-        """读一帧，返回文本载荷（str）；只处理文本帧与 close/ping"""
+        """读一条完整消息，返回文本载荷（str）；处理 close/ping/pong 与分片。
+
+        RFC6455：一条消息可以拆成多个帧——首帧 opcode=0x1 且 fin=0，其后各帧为
+        opcode=0x0（continuation），最后一帧 fin=1。旧实现丢弃 fin=0 的帧，
+        遇到长 CDP 消息（体积大的 Network 事件）就会拿到半截 JSON。
+        """
+        frags = None       # 已收集的分片字节（None 表示尚未收到首帧）
         while True:
             hdr = self._read_exact(2)
             b0, b1 = hdr[0], hdr[1]
@@ -156,11 +265,18 @@ class _WS:
             if opcode == 0x9:  # ping -> pong
                 self._send_frame(0xA, payload)
                 continue
-            if opcode in (0x1, 0x0):  # text（CDP 只发文本；连续帧忽略，够用）
-                if fin:
-                    return payload.decode("utf-8", "replace")
+            if opcode == 0xA:  # pong（CDP 不发，收到即忽略）
                 continue
-            continue
+            if opcode in (0x1, 0x0):  # text / continuation
+                if opcode == 0x1:
+                    frags = bytearray(payload)      # 新消息首帧
+                elif frags is not None:
+                    frags.extend(payload)           # 续帧追加
+                # frags is None 的孤立续帧属协议异常，直接丢弃
+                if fin and frags is not None:
+                    return frags.decode("utf-8", "replace")
+                continue
+            continue  # 二进制等其它帧：CDP 不使用，忽略
 
     def _send_frame(self, opcode, payload):
         if isinstance(payload, str):
@@ -181,13 +297,14 @@ class _WS:
         self._send_frame(0x1, text)
 
     def close(self):
+        # 关闭时连接可能已被对端断开，OSError 属预期内
         try:
             self._send_frame(0x8, b"")
-        except Exception:
+        except OSError:
             pass
         try:
             self._sock.close()
-        except Exception:
+        except OSError:
             pass
 
 
@@ -276,8 +393,9 @@ def run_token_fetch(trigger_content=DEFAULT_TRIGGER_CID, token_file=None,
         return 4, p
 
     # 独立持久化 profile：登录态留存，一次登录后续免登，不干扰日常浏览器
-    profile = os.environ.get("AUTO_PROFILE") or os.path.join(
-        os.path.expanduser("~"), ".workbuddy", "smartedu-token-profile")
+    # 存放于用户配置目录 ~/.config/shudaole/（历史版本曾用 ~/.workbuddy/，见 _migrate_profile）
+    profile = os.environ.get("AUTO_PROFILE") or default_profile_dir()
+    _migrate_profile()
     os.makedirs(profile, exist_ok=True)
 
     # 随机取一个高位端口做 remote-debugging
@@ -332,19 +450,21 @@ def run_token_fetch(trigger_content=DEFAULT_TRIGGER_CID, token_file=None,
 
     cdp = CDP(ws_url)
     # 开启网络与页面领域，抓取请求头
+    # （CDP 命令可能抛 RuntimeError(协议错误)/TimeoutError/OSError；失败要留下线索，
+    #  不再无脑 pass——否则「抓不到令牌」永远查不出是哪一步没起来）
     try:
         cdp.send("Network.enable")
-    except Exception:
-        pass
+    except (RuntimeError, TimeoutError, OSError) as e:
+        _dbg(f"Network.enable 失败: {e}")
     try:
         cdp.send("Page.enable")
-    except Exception:
-        pass
+    except (RuntimeError, TimeoutError, OSError) as e:
+        _dbg(f"Page.enable 失败: {e}")
     # 目标页若尚未加载，触发导航到起始页（通常启动参数已带 URL）
     try:
         cdp.send("Page.navigate", {"url": start_url})
-    except Exception:
-        pass
+    except (RuntimeError, TimeoutError, OSError) as e:
+        _dbg(f"Page.navigate 失败: {e}")
 
     emit({"ok": None, "waiting": True, "message": "正在打开浏览器窗口，请稍候..."})
 
@@ -368,7 +488,8 @@ def run_token_fetch(trigger_content=DEFAULT_TRIGGER_CID, token_file=None,
                 return
             seen.add(tok)
             captured = tok
-        except Exception:
+        except (AttributeError, KeyError, TypeError):
+            # 事件结构异常（缺字段/类型不符）跳过即可，日志不打——高频事件会刷屏
             pass
 
     while time.time() - started < timeout:
@@ -402,8 +523,8 @@ def run_token_fetch(trigger_content=DEFAULT_TRIGGER_CID, token_file=None,
                               "message": "已打开教材详情页，正在触发资源加载并捕获令牌..."})
                         try:
                             cdp.send("Page.navigate", {"url": trigger_url})
-                        except Exception:
-                            pass
+                        except (RuntimeError, TimeoutError, OSError) as e:
+                            _dbg(f"回跳教材详情页失败: {e}")
                     else:
                         _hint("正在触发资源加载并捕获令牌...", last_wait_hint, emit)
         except OSError:
@@ -415,16 +536,14 @@ def run_token_fetch(trigger_content=DEFAULT_TRIGGER_CID, token_file=None,
 
     if captured:
         if token_file:
-            # 令牌写入路径防护：只取参数中的纯文件名拼回规范化后的目录，
-            # 剥掉任何目录成分（含 ..），落盘前再校验一次包含关系
+            # 优先写入用户配置目录（write_token 内部处理目录不存在/无权限的情况）；
+            # 传入的 token_file 仅作为兜底目录使用，且仍做路径穿越防护——
+            # 只取纯文件名拼回规范化后的目录，落盘前再校验包含关系。
             raw = Path(token_file)
             base = raw.resolve().parent
             target = base / raw.name
             if target.resolve().is_relative_to(base):
-                try:
-                    target.write_text(captured, encoding="utf-8")
-                except Exception:
-                    pass
+                write_token(captured, base_dir=base)
         p = {"ok": True, "token": captured,
              "source": "自动捕获于 " + time.strftime("%H:%M:%S")}
         emit(p)
@@ -441,8 +560,9 @@ def run_token_fetch(trigger_content=DEFAULT_TRIGGER_CID, token_file=None,
 def main():
     ap = argparse.ArgumentParser(description="自动获取 smartedu x-nd-auth 令牌")
     ap.add_argument("--trigger-content", default=DEFAULT_TRIGGER_CID)
-    ap.add_argument("--token-file", default=os.path.join(
-        os.path.dirname(os.path.abspath(__file__)), "token.txt"))
+    ap.add_argument("--token-file", default=token_save_path(
+        os.path.dirname(os.path.abspath(__file__))),
+                    help="令牌文件位置（默认用户配置目录 ~/.config/shudaole/token.txt）")
     ap.add_argument("--timeout", type=int, default=180)
     ap.add_argument("--login-url", default="")
     args = ap.parse_args()
@@ -467,11 +587,13 @@ def _hint(text, last_ref, emit=None):
 
 
 def _page_url(cdp):
+    """取当前页面 URL；查询失败返回空串（调用方据此判断状态，不致命）"""
     try:
         res = cdp.send("Runtime.evaluate",
                        {"expression": "location.href", "returnByValue": True})
         return res.get("result", {}).get("value", "")
-    except Exception:
+    except (RuntimeError, TimeoutError, OSError, KeyError) as e:
+        _dbg(f"读取页面地址失败: {e}")
         return ""
 
 
@@ -494,7 +616,9 @@ def _fetch_ws_url(port):
         data = json.loads(resp.read().decode("utf-8", "replace"))
         conn.close()
         return data.get("webSocketDebuggerUrl")
-    except Exception:
+    except (OSError, ValueError) as e:
+        # OSError: 调试端口还没起来/连接断开；ValueError: 返回的不是合法 JSON
+        _dbg(f"读取 CDP 端点失败: {e}")
         return None
 
 
@@ -508,8 +632,8 @@ def _kill(proc):
                            timeout=5, check=False)
         else:
             proc.terminate()
-    except Exception:
-        pass
+    except (OSError, subprocess.SubprocessError) as e:
+        _dbg(f"关闭浏览器进程失败: {e}")
 
 
 if __name__ == "__main__":

@@ -84,7 +84,24 @@ DETAIL_ENDPOINTS = [
 # ti_storages 为空时按固定模式构造 PDF 候选地址（r1/r2/r3 互为镜像）
 PDF_URL_TEMPLATE = "https://r{n}-ndr.ykt.cbern.com.cn/edu_product/esp/assets_document/{cid}.pkg/pdf.pdf"
 
-TOKEN_FILE = Path(__file__).resolve().parent / "token.txt"
+def _resolve_token_file():
+    """令牌落盘位置：优先用户配置目录 ~/.config/shudaole/token.txt。
+
+    历史版本把 token.txt 放在程序（脚本/exe）同目录，那里可能是共享盘或同步盘，
+    明文凭据跟着项目目录走不安全；配置目录是用户私有位置且 POSIX 下可收紧到 600。
+    配置目录创建失败（极少见）时退回程序同目录，行为与旧版一致。
+    """
+    cfg = Path(os.environ.get("SHUDAOLE_CONFIG_DIR") or (Path.home() / ".config" / "shudaole"))
+    try:
+        cfg.mkdir(parents=True, exist_ok=True)
+        return cfg / "token.txt"
+    except OSError:
+        return Path(__file__).resolve().parent / "token.txt"
+
+
+TOKEN_FILE = _resolve_token_file()
+# 旧位置（程序同目录）：升级后仍可读，避免老用户令牌"消失"
+TOKEN_FILE_LEGACY = Path(__file__).resolve().parent / "token.txt"
 
 TOKEN_HELP = (
     "  获取登录令牌的方法:\n"
@@ -674,19 +691,24 @@ def download_file(urls, dest, session, retries=3, timeout=30, label="", on_progr
 
 # ---------- 令牌管理 ----------
 def initial_token(cli_token):
-    """令牌来源优先级: --token 参数 > 环境变量 SMARTEDU_TOKEN > token.txt 文件"""
+    """令牌来源优先级: --token 参数 > 环境变量 SMARTEDU_TOKEN > 令牌文件
+
+    令牌文件按「用户配置目录 ~/.config/shudaole/token.txt > 程序同目录 token.txt」
+    顺序查找，两个位置都读——老版本用户升级后旧令牌依然生效。
+    """
     if cli_token and cli_token.strip():
         return cli_token.strip()
     env = (os.environ.get("SMARTEDU_TOKEN") or "").strip()
     if env:
         return env
-    if TOKEN_FILE.exists():
-        try:
-            t = TOKEN_FILE.read_text(encoding="utf-8", errors="replace").strip()
-            if t:
-                return t
-        except OSError:
-            pass
+    for path in (TOKEN_FILE, TOKEN_FILE_LEGACY):
+        if path.exists():
+            try:
+                t = path.read_text(encoding="utf-8", errors="replace").strip()
+                if t:
+                    return t
+            except OSError:
+                continue
     return None
 
 
@@ -726,6 +748,11 @@ class AuthContext:
         if self.save_token:
             try:
                 TOKEN_FILE.write_text(token, encoding="utf-8")
+                if os.name != "nt":  # POSIX：令牌只属主可读写
+                    try:
+                        os.chmod(TOKEN_FILE, 0o600)
+                    except OSError:
+                        pass
                 log(f"  已将令牌保存到 {TOKEN_FILE}（下次运行自动使用）")
             except OSError as e:
                 log(f"  令牌保存失败: {e}")
@@ -809,15 +836,26 @@ def fetch_catalog_index(force=False, timeout=60, on_log=None):
 
 
 def _write_catalog_cache(items, log):
-    """把目录写入磁盘缓存（失败静默——缓存只是加速手段）。"""
+    """把目录写入磁盘缓存（原子写：先写 .tmp 再 os.replace）。
+
+    旧实现直接 write_text，进程被中断会留下半截 JSON（下次读取必失败，只能重下）；
+    且失败静默吞掉。改为临时文件 + 原子替换，任何时刻磁盘上都只有完整文件，
+    失败则给出原因（缓存只是加速手段，失败不影响使用）。
+    """
+    tmp = CATALOG_CACHE.parent / (CATALOG_CACHE.name + ".tmp")
     try:
-        CATALOG_CACHE.write_text(
+        tmp.write_text(
             json.dumps({"fetched_at": time.time(), "schema": CATALOG_SCHEMA,
                         "items": items}, ensure_ascii=False),
             encoding="utf-8")
+        os.replace(str(tmp), str(CATALOG_CACHE))
         log(f"目录已缓存到 {CATALOG_CACHE.name}（7 天内无需重新下载）")
-    except OSError:
-        pass
+    except OSError as e:
+        log(f"目录缓存写入失败（不影响使用，下次仍会重新拉取）: {e}")
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 # ---------- 目录规范化：把平台原始标签整理为相互正交的维度 ----------

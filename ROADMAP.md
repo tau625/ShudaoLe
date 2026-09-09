@@ -12,26 +12,26 @@
 
 可在一次补丁版本（v1.2.1）内全部完成，不动架构。
 
-- [ ] **P0-1 修浏览器 profile 目录命名泄漏**
+- [x] **P0-1 修浏览器 profile 目录命名泄漏**
   `auto_fetch_token.py:279-281` 把独立浏览器 profile 硬编码到 `~/.workbuddy/smartedu-token-profile` —— `.workbuddy` 是开发机 AI 工具目录名，会在**最终用户机器**上创建语义不明的隐藏目录。
   改为 `~/.config/shudaole/token-profile`（Windows 下 `%USERPROFILE%\.config\shudaole\` 即可，无需写注册表）。
   *理由*：品牌一致 + 避免在用户机器留下无法解释的目录。*效果*：新用户机器目录干净、可预期。
   *迁移*：启动时若发现旧路径存在，静默搬移或直接弃用（登录态重登一次即可）。
 
-- [ ] **P0-2 目录缓存原子写**
+- [x] **P0-2 目录缓存原子写**
   `smartedu_downloader.py:811-820` 直接 `write_text`，进程中断会留下半截 JSON；且 `except OSError: pass` 静默吞错。
   改为「写 `.tmp` → `os.replace()`」原子替换，失败记入日志。
   *理由*：缓存损坏虽只触发重下，但半截文件 + 无声失败是坏习惯，一行成本修掉。*效果*：缓存永不半截，失败可见。
 
-- [ ] **P0-3 WebSocket 连续帧支持**
+- [x] **P0-3 WebSocket 连续帧支持**
   `auto_fetch_token.py` 的 `_WS.recv` 不处理 `OP_CONTINUATION`（opcode 0x0）分片帧，CDP 长消息（如大体积 Network 事件）可能被截断，导致令牌偶发漏抓。
   *理由*：这是协议正确性问题，不是优化。*效果*：令牌抓取在复杂页面下稳定。
 
-- [ ] **P0-4 令牌落盘位置与权限**
+- [x] **P0-4 令牌落盘位置与权限**
   `token.txt` 当前写在脚本/exe 同目录，明文。改为优先存用户配置目录（`~/.config/shudaole/token.txt`），POSIX 下 `chmod 600`；同目录旧文件仍兼容读取。
   *理由*：脚本目录可能是共享/同步盘，明文凭据不该随项目目录走。*效果*：凭据泄漏面收窄。
 
-- [ ] **P0-5 收窄裸 `except`**
+- [x] **P0-5 收窄裸 `except`**
   `auto_fetch_token.py` 多处 `except Exception: pass` 吞掉异常上下文。改为捕获具体异常并记日志（至少 stderr）。
   *理由*：无声失败最耗排查时间。*效果*：故障可诊断。
 
