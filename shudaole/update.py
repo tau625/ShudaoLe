@@ -3,7 +3,9 @@
 
 设计要点（已定方案）：
   - 只查版本号：GET /repos/tau625/ShudaoLe/releases/latest，无遥测/PII
-  - 走系统代理；国内网络不稳时回退镜像前缀（用户可在设置中改）
+  - 版本查询直连 api.github.com（前缀式镜像不代理 API）；更新包下载 v1.4.0 起
+    默认走内置镜像（ghfast.top 等，镜像优先、直连兜底），SHUDAOLE_UPDATE_MIRROR
+    可自定义、SHUDAOLE_NO_MIRROR=1 可禁用
   - 有新版 → 界面横幅：「查看新版」（跳 Release 页）+「一键下载」zip 到本地
   - v1.3.5 起新增「自动更新」通道（用户点击后才启动，绝不后台偷跑）：
       按平台挑选 Release 附件 → 流式下载到本地缓存（实时进度）→
@@ -22,15 +24,40 @@ import threading
 from pathlib import Path
 
 RELEASE_API = "https://api.github.com/repos/tau625/ShudaoLe/releases/latest"
-MIRROR_ENV = "SHUDAOLE_UPDATE_MIRROR"   # 例：https://ghproxy.net/   （前缀式镜像）
+MIRROR_ENV = "SHUDAOLE_UPDATE_MIRROR"   # 用户自定义镜像前缀，设置后覆盖内置列表
+NO_MIRROR_ENV = "SHUDAOLE_NO_MIRROR"    # 置 1 禁用镜像（直连优先，供自建代理用户）
 DISABLE_ENV = "SHUDAOLE_NO_UPDATE_CHECK"
 TIMEOUT = 10
+
+# 内置默认镜像（前缀式，只代理 github.com 文件下载；api.github.com 不适用）。
+# v1.4.0 起默认启用：国内直连 GitHub Release 附件经常失败/极慢，镜像优先
+# 能显著提高「一键更新」成功率；失败自动尝试下一个并最终回退直连，镜像只是
+# 加速通道，不是依赖。这类服务域名失效率高，某家失效时改这个列表即可。
+DEFAULT_MIRRORS = (
+    "https://ghfast.top/",
+    "https://gh-proxy.com/",
+    "https://ghproxy.net/",
+)
 
 _cache = {"checked_at": 0.0, "result": None, "lock": threading.Lock()}
 
 
 def _mirror_prefix():
+    """用户自定义镜像（老环境变量，保持兼容；设置后不再混入内置列表）。"""
     return (os.environ.get(MIRROR_ENV) or "").strip().rstrip("/")
+
+
+def mirror_prefixes():
+    """镜像前缀列表（优先级序）：NO_MIRROR 禁用 > 用户自定义 > 内置默认。"""
+    if os.environ.get(NO_MIRROR_ENV):
+        return []
+    custom = _mirror_prefix()
+    return [custom] if custom else list(DEFAULT_MIRRORS)
+
+
+def _candidate_urls(asset_url):
+    """大文件下载候选：镜像优先、直连兜底（镜像只是加速，绝不只依赖镜像）。"""
+    return [m.rstrip("/") + "/" + asset_url for m in mirror_prefixes()] + [asset_url]
 
 
 def _version_tuple(v):
@@ -103,7 +130,10 @@ def _checksums_for(assets, name):
             break
     if not sums_url:
         return None
-    for url in ([sums_url] + ([_mirror_prefix() + sums_url] if _mirror_prefix() else [])):
+    # SUMS 直连优先：恶意镜像理论上可同时替换安装包与校验和，校验和尽量从
+    # 官方拉（文本小，直连可承受）；直连失败（国内常态）再退镜像——有校验总比没有强。
+    urls = [sums_url] + [m.rstrip("/") + "/" + sums_url for m in mirror_prefixes()]
+    for url in urls:
         try:
             opener = urllib.request.build_opener()
             with opener.open(url, timeout=TIMEOUT) as r:
@@ -152,10 +182,8 @@ def download_update(asset_url, asset_name, expected_sha=None, dest_dir=None,
     dest = dest_dir / asset_name
     part = dest_dir / (asset_name + ".part")
 
-    urls = [asset_url]
-    if _mirror_prefix():
-        urls.append(_mirror_prefix() + asset_url)
-    last_err = ""
+    urls = _candidate_urls(asset_url)
+    errors = []
     for url in urls:
         try:
             opener = urllib.request.build_opener()
@@ -179,23 +207,24 @@ def download_update(asset_url, asset_name, expected_sha=None, dest_dir=None,
                             except Exception:
                                 pass
             if total and done != total:
-                last_err = f"下载不完整（{done}/{total} 字节）"
+                errors.append(f"下载不完整（{done}/{total} 字节）")
                 part.unlink(missing_ok=True)
                 continue
             if not verify_sha256(part, expected_sha):
-                last_err = "SHA256 校验失败：文件与官方发布不一致，已删除"
+                errors.append("SHA256 校验失败：文件与官方发布不一致，已删除")
                 part.unlink(missing_ok=True)
                 continue
             shutil.move(str(part), str(dest))
             return str(dest), ""
         except Exception as e:
-            last_err = f"下载失败: {e}"
+            errors.append(f"下载失败: {e}")
             try:
                 part.unlink(missing_ok=True)
             except OSError:
                 pass
             continue
-    return "", last_err or "下载失败"
+    # 报错带上每一次尝试的结果，方便判断是镜像全挂还是直连也不通
+    return "", "；".join(errors) or "下载失败"
 
 
 def start_windows_installer(installer_path):

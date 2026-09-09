@@ -252,6 +252,35 @@
   #toast.info { background: var(--info-bg); color: var(--info-fg); border-color: #c9d7e6; }
   #toast.show { display: block; }
 
+  /* ---- 视图开关（五四学制 / 特殊教育）---- */
+  .view-switch-bar {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin: 10px 0 4px; padding: 8px 12px;
+    background: var(--bg); border: 1px solid var(--line-soft); border-radius: 10px;
+  }
+  .view-switch-label { font-size: 13px; font-weight: 600; color: var(--text); }
+  .view-switch-hint { font-size: 12px; color: var(--muted); }
+  .sys-switch-group { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+  .sys-switch {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 8px 14px; font-size: 13px; border-radius: 9px;
+    background: var(--card); color: var(--muted);
+    border: 1px solid var(--line); cursor: pointer; transition: all .15s;
+  }
+  .sys-switch::before {
+    content: ''; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--line); transition: background .15s;
+  }
+  .sys-switch:hover { border-color: var(--primary); color: var(--text); }
+  .sys-switch[aria-pressed="true"] {
+    background: var(--primary); border-color: var(--primary);
+    color: #fff; font-weight: 600; box-shadow: 0 2px 8px rgba(178,58,46,.28);
+  }
+  .sys-switch[aria-pressed="true"]::before { background: #fff; }
+  .sys-switch:disabled { opacity: .55; cursor: not-allowed; }
+  /* 学制（63/54 单选组）与特殊教育（独立开关）之间的分隔线 */
+  .view-switch-divider { width: 1px; height: 18px; background: var(--line); flex: 0 0 auto; }
+
   /* ---- 响应式 ---- */
   .row label { flex: 1 1 130px; min-width: 110px; }
   #token { max-width: 360px; }
@@ -293,6 +322,18 @@
       学段已开放<b>小学 / 初中 / 高中 / 特殊教育</b>全部范围；版本常用分组为<b>人教系列</b>
       （人教版 / 统编版 / 人教鄂教版）与 <b>沪教版</b>，点「人教版系（整套）」可一次涵盖人教全部主科，
       其余版本标签也已在下拉中按结果数列出可选。
+    </div>
+    <div class="view-switch-bar">
+      <span class="view-switch-label">教材视图</span>
+      <span class="sys-switch-group" role="radiogroup" aria-label="学制切换">
+        <button type="button" id="switch-63" class="sys-switch" aria-pressed="true" title="常规教材：小学6年+初中3年（全国大多数地区）">六三学制</button>
+        <button type="button" id="switch-54" class="sys-switch" aria-pressed="false" title="五·四学制教材：小学5年+初中4年">五四学制</button>
+      </span>
+      <span class="view-switch-divider" aria-hidden="true"></span>
+      <span class="sys-switch-group">
+        <button type="button" id="switch-spec" class="sys-switch" aria-pressed="false" title="只显示特殊教育学校（盲校/聋校/培智）教材">特殊教育</button>
+      </span>
+      <span class="view-switch-hint">切换后，下方学段/年级等选项会随之联动</span>
     </div>
     <div class="row" style="margin-top:2px">
       <label data-dim="phase">学段 <select id="f-phase"></select></label>
@@ -832,6 +873,9 @@
     const params = new URLSearchParams();
     const f = currentFilters();
     Object.keys(f).forEach(k => params.set(k, f[k]));
+    // 视图开关（63/54 单选 + 特教开关，见下方 SYS/SPEC 块）：63 视图排除五四变体与特殊学校教材
+    params.set('system', SYS === '54' ? '五·四学制' : '六·三学制');
+    params.set('school', SPEC ? '特殊学校' : '常规学校');
     const kw = $('#f-kw').value.trim();
     if (kw) params.set('keyword', kw);
     return params;
@@ -1005,6 +1049,47 @@
     renderRows();
     toast(`已加入 ${n} 条`, 'info');
   };
+
+  /* ---------- 视图开关：63/54 学制单选 + 特殊教育独立开关（纯新增，不改动上方任何逻辑） ---------- */
+  // 与后端 dim_match 兜底语义配套的约定：
+  //   SYS='63'（默认）= 常规教材：system=六·三学制（平台未标注学制即常规）
+  //                     + school=常规学校（排除盲校/聋校/培智）
+  //   SYS='54'        = system=五·四学制；SPEC=true = school=特殊学校（学段下拉仍可继续筛）
+  // 63/54 是单选组（必有一个亮，默认 63）；特殊教育是独立开关，可与任一学制组合。
+  // 选择持久化在 localStorage('shudaole.views')，下次进入自动恢复。
+  // 注意：必须定义在首个 reload() 之前，否则首屏请求会因变量未初始化走错视图。
+  var SYS = '63', SPEC = false;
+  (function () {
+    try {
+      const saved = JSON.parse(localStorage.getItem('shudaole.views') || '{}');
+      // 兼容旧版存档（v1.3.9 首版用 sys54 布尔），有则迁移
+      if (saved.sys === '54' || saved.sys54 === true) SYS = '54';
+      SPEC = saved.spec === true;
+    } catch (e) { /* 存档损坏即回默认 63 */ }
+
+    const btn63 = $('#switch-63');
+    const btn54 = $('#switch-54');
+    const btnSpec = $('#switch-spec');
+
+    function saveViews() {
+      try {
+        localStorage.setItem('shudaole.views',
+          JSON.stringify({ sys: SYS, spec: SPEC }));
+      } catch (e) { /* 隐私模式等场景存不进就仅本次会话生效 */ }
+    }
+    function syncUI() {
+      btn63.setAttribute('aria-pressed', String(SYS === '63'));
+      btn54.setAttribute('aria-pressed', String(SYS === '54'));
+      btnSpec.setAttribute('aria-pressed', String(SPEC));
+    }
+
+    // 学制组为单选：点击已选中项不动作，不可取消（始终亮一个）
+    btn63.onclick = () => { if (SYS !== '63') { SYS = '63'; saveViews(); syncUI(); reload(); } };
+    btn54.onclick = () => { if (SYS !== '54') { SYS = '54'; saveViews(); syncUI(); reload(); } };
+    btnSpec.onclick = () => { SPEC = !SPEC; saveViews(); syncUI(); reload(); };
+
+    syncUI();
+  })();
 
   reload();
   refresh();

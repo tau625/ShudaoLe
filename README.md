@@ -40,6 +40,12 @@ https://github.com/user-attachments/assets/2e59032c-0cc7-4e00-802e-52b620c795b5
   用浏览器下载后自行决定何时安装
 - **macOS / Linux**：下载完成后自动打开更新包所在目录，解压替换旧目录即可（程序不自替换二进制，避免权限与安全问题）
 
+更新包下载**默认走国内镜像加速**（ghfast.top 等前缀式镜像，逐个尝试、失败自动回退 GitHub 直连），
+校验和文件 `SHA256SUMS.txt` 始终优先从 GitHub 官方拉取。相关环境变量：
+
+- `SHUDAOLE_UPDATE_MIRROR`：自定义镜像前缀（如 `https://ghproxy.net/`），设置后覆盖内置镜像列表
+- `SHUDAOLE_NO_MIRROR=1`：禁用镜像，始终直连（自建代理用户适用）
+
 下载失败（网络波动/校验不符）会显示原因并可点按钮重试，不影响当前版本继续使用。
 更新缓存位于 `~/.config/shudaole/updates/`（Windows 为 `%USERPROFILE%\.config\shudaole\updates\`）。
 

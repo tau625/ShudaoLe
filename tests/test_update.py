@@ -107,6 +107,63 @@ def test_download_update_rejects_http(tmp_path):
     assert "GitHub" in err
 
 
+# ---------- 镜像加速（v1.4.0 默认启用） ----------
+
+def test_mirror_prefixes_default_builtin(monkeypatch):
+    for var in (upd.MIRROR_ENV, upd.NO_MIRROR_ENV):
+        monkeypatch.delenv(var, raising=False)
+    assert upd.mirror_prefixes() == list(upd.DEFAULT_MIRRORS)
+
+
+def test_mirror_prefixes_disabled(monkeypatch):
+    monkeypatch.setenv(upd.NO_MIRROR_ENV, "1")
+    assert upd.mirror_prefixes() == []
+
+
+def test_mirror_prefixes_custom_overrides_builtin(monkeypatch):
+    monkeypatch.setenv(upd.MIRROR_ENV, "https://my.mirror.example/")
+    assert upd.mirror_prefixes() == ["https://my.mirror.example"]
+
+
+def test_candidate_urls_mirror_first_direct_last():
+    url = "https://github.com/tau625/ShudaoLe/releases/download/v1/x.exe"
+    urls = upd._candidate_urls(url)
+    assert urls[-1] == url                      # 直连永远兜底
+    assert urls[0].startswith("https://")       # 镜像在前
+    assert urls[0].endswith(url)                # 前缀式拼接
+
+
+def test_download_update_tries_mirror_then_direct(tmp_path, monkeypatch):
+    """镜像失败后必须继续尝试直连，且错误信息包含每次尝试。"""
+    calls = []
+
+    class _Resp:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def read(self, n):
+            return b""
+
+    def fake_open(self, req, timeout=0):
+        calls.append(req.full_url)
+        if "mirror" in req.full_url:
+            raise OSError("mirror down")
+        raise OSError("direct down")
+
+    import urllib.request as _ur
+    monkeypatch.setattr(_ur.OpenerDirector, "open", fake_open)
+    path, err = upd.download_update(
+        "https://github.com/tau625/ShudaoLe/releases/download/v1/x.exe",
+        "x.exe", dest_dir=tmp_path)
+    assert path == ""
+    assert len(calls) == len(upd.mirror_prefixes()) + 1   # 镜像全部试过 + 直连
+    assert calls[-1].startswith("https://github.com/")    # 直连是最后一个
+    assert err.count("下载失败") >= 2
+
+
 # ---------- 安装器启动参数 ----------
 
 def test_start_windows_installer_missing_file(monkeypatch):

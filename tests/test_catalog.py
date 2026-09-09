@@ -92,6 +92,87 @@ def test_all_phases_open():
     assert set(SUPPORTED_SCOPE["phase"]) >= {"小学", "初中", "高中", "特殊教育"}
 
 
+# ---------- system / phase 视图语义（网页「五四学制」「特殊教育」开关） ----------
+
+def _it(system="", phase="小学", id="x", school=""):
+    return {"id": id, "kind": "textbook", "title": "数学", "title_raw": "数学",
+            "phase": phase, "grade": "一年级", "subject": "数学",
+            "publisher": "人教版", "volume": "上册", "system": system,
+            "school": school}
+
+
+def test_system_fallback_unmarked_is_regular():
+    """平台只显式标注五四学制；未标注一律视为常规（六·三）。"""
+    unmarked = _it(system="")
+    assert dim_match(unmarked, "system", "六·三学制") is True
+    assert dim_match(unmarked, "system", "五·四学制") is False
+    regular = _it(system="六·三学制")
+    assert dim_match(regular, "system", "六·三学制") is True
+    assert dim_match(regular, "system", "五·四学制") is False
+
+
+def test_system_explicit_54():
+    wusi = _it(system="五·四学制")
+    assert dim_match(wusi, "system", "五·四学制") is True
+    assert dim_match(wusi, "system", "六·三学制") is False
+
+
+def test_system_aliases():
+    """口语写法（五四学制/六三学制）经别名归一后同样命中。"""
+    wusi = _it(system="五·四学制")
+    assert dim_match(wusi, "system", "五四学制") is True
+    regular = _it(system="")
+    assert dim_match(regular, "system", "六三学制") is True
+
+
+def test_school_sentinels():
+    """school 哨兵：「特殊学校」= 盲校/聋校/培智任一；「常规学校」= school 为空。
+
+    注意盲校/聋校的 phase 是小学/初中，只有培智 phase=特殊教育——
+    特殊学校教材必须按 school 维度拎出来，按 phase 排不干净。"""
+    blind = _it(school="盲校", phase="小学")
+    deaf = _it(school="聋校", phase="初中")
+    peizhi = _it(school="培智", phase="特殊教育")
+    normal = _it(school="")
+    for it in (blind, deaf, peizhi):
+        assert dim_match(it, "school", "特殊学校") is True
+        assert dim_match(it, "school", "常规学校") is False
+    assert dim_match(normal, "school", "常规学校") is True
+    assert dim_match(normal, "school", "特殊学校") is False
+
+
+def test_system_views_partition_catalog(sample_items):
+    """五四视图 + 常规视图 = 全集（无重叠、无遗漏）。"""
+    items = sample_items + [_it(system="五·四学制", id="id-54"),
+                            _it(system="", phase="特殊教育", id="id-spec")]
+    full = search_catalog(items)
+    wusi = search_catalog(items, system="五·四学制")
+    regular = search_catalog(items, system="六·三学制")
+    assert {it["id"] for it in full} == ({it["id"] for it in wusi}
+                                         | {it["id"] for it in regular})
+    assert not ({it["id"] for it in wusi} & {it["id"] for it in regular})
+
+
+def test_regular_view_excludes_special(sample_items):
+    """常规视图（六·三 + 常规学校）同时排除五四变体与全部特殊学校教材。"""
+    items = sample_items + [_it(system="五·四学制", id="id-54"),
+                            _it(school="盲校", phase="小学", id="id-blind"),
+                            _it(school="培智", phase="特殊教育", id="id-spec")]
+    ids = {it["id"] for it in search_catalog(items, system="六·三学制",
+                                             school="常规学校")}
+    assert ids == {"id-1", "id-2"}
+
+
+def test_special_school_view(sample_items):
+    """特教视图（school=特殊学校）显示全部盲校/聋校/培智教材。"""
+    items = sample_items + [_it(school="盲校", phase="小学", id="id-blind"),
+                            _it(school="聋校", phase="初中", id="id-deaf"),
+                            _it(school="培智", phase="特殊教育", id="id-spec")]
+    ids = {it["id"] for it in search_catalog(items, system="六·三学制",
+                                             school="特殊学校")}
+    assert ids == {"id-blind", "id-deaf", "id-spec"}
+
+
 # ---------- publisher 全量可见 ----------
 
 def test_publisher_label_ungrouped_visible():

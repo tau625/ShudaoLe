@@ -436,7 +436,13 @@ DIM_LABELS = {
 }
 # 年级口语别名也用于维度匹配（--grade 初一 == 七年级）
 
-DIM_ALIASES = {"grade": GRADE_ALIASES}
+DIM_ALIASES = {
+    "grade": GRADE_ALIASES,
+    # 学制口语写法（CLI --system 六三学制 等）统一到规范值
+    "system": {"六三学制": "六·三学制", "六·三": "六·三学制",
+               "54学制": "五·四学制", "五四学制": "五·四学制",
+               "五·四": "五·四学制"},
+}
 
 # 网页界面启用的维度白名单（按展示顺序）。后端计算的维度很多，但并非全部适合作为
 # 下拉展示；此白名单同时供 GUI 渲染下拉与 CLI 参考，避免前后端各维护一份规则。
@@ -459,6 +465,12 @@ SUPPORTED_SCOPE = {
 # 因为 3070 条教材未标 audience，它们默认就是学生用的）。
 
 AUDIENCE_EXCLUDE = {"学生用书": ("教师用书",)}
+
+# 「特殊学校 / 常规学校」是 school 维度上的哨兵值而非真实取值：平台把盲校/聋校/
+# 培智教材标在 school 字段（其中仅培智的 phase 是「特殊教育」，盲校/聋校挂在
+# 小学/初中下，按 phase 排不干净）。网页「特殊教育」开关点亮发 school=特殊学校
+# （任一特殊学校类型命中），关闭发 school=常规学校（school 为空即常规学校）。
+SCHOOL_SENTINELS = {"特殊学校", "常规学校"}
 
 DEFAULT_FILTERS = {d: v[0] for d, v in SUPPORTED_SCOPE.items() if len(v) == 1}
 DEFAULT_FILTERS.setdefault("audience", "学生用书")
@@ -707,6 +719,17 @@ def dim_match(item, dim, query):
     if dim == "audience" and query in AUDIENCE_EXCLUDE:
         excluded = (item.get(dim) or "").strip()
         return not any(e in excluded for e in AUDIENCE_EXCLUDE[query])
+    # system 兜底：平台只对五四教材显式标注学制（目录里 348 条），其余 3000+
+    # 条常规（六三）教材 system 为空——若按字面子串匹配，「六·三学制」会命中
+    # 0 条。故约定：六·三 = 非五四（未标注一律视为常规），五·四 = 显式五四。
+    if dim == "system" and query in ("六·三学制", "五·四学制"):
+        value = (item.get(dim) or "").strip()
+        return (value != "五·四学制") if query == "六·三学制" else (value == "五·四学制")
+    # school 哨兵：「特殊学校」= 任一盲校/聋校/培智命中；「常规学校」= school 为空
+    if dim == "school" and query in SCHOOL_SENTINELS:
+        value = (item.get(dim) or "").strip()
+        is_special = value in ("盲校", "聋校", "培智")
+        return is_special if query == "特殊学校" else not is_special
     value = (item.get(dim) or "").strip()
     if not value:
         return False
