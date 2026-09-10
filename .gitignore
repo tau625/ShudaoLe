@@ -44,6 +44,10 @@ htmlcov/
 # 本地工作产物（图标预览/截图/临时脚本），不入库
 assets-preview/
 dist.lnk
+.playwright-cli/
+server_test.log
+shudaole.egg-info/
+uv.lock
 
 # 内部会话总结/知识库（含工作流细节），本地存档
 docs/session-summary*.md

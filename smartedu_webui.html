@@ -206,11 +206,16 @@
   .cat-table-wrap td { border-bottom: 1px solid var(--line-soft); }
   .cat-row-note { font-size: 12px; color: var(--muted); }
   #cat-count { font-weight: 600; color: var(--text); }
-  .kind-tag {
-    display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 4px;
-    font-size: 11px; background: var(--pending-bg); color: var(--pending-fg);
-    vertical-align: 1px;
-  }
+  /* 清单徽标（结果栏）与构成摘要（卡片③） */
+  #btn-cart b { color: var(--primary); }
+  .cart-summary { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  .cart-summary b { color: var(--text); font-weight: 600; }
+  /* 刷新中的目录表：降透明度提示"内容正在更新"，避免误以为卡死 */
+  .cat-table-wrap { transition: opacity .15s; }
+  .cat-table-wrap.is-refreshing { opacity: .55; }
+  /* 清单徽标点击滚动后，输入框短暂高亮指位 */
+  #links.flash { border-color: var(--primary); box-shadow: 0 0 0 3px var(--focus-ring); }
+  .kw-input { width: 170px; }
   .btn-add[disabled] { color: var(--success-fg); border-color: var(--success-bg); background: var(--success-bg); cursor: default; }
 
   /* ---- 已选条件（筛选 chips）---- */
@@ -278,6 +283,13 @@
   }
   .sys-switch[aria-pressed="true"]::before { background: #fff; }
   .sys-switch:disabled { opacity: .55; cursor: not-allowed; }
+  /* 互斥防呆置灰：不用 HTML disabled——它吞掉点击事件，触屏/键盘用户将得不到解释；
+     点击仍会触发 handler 里的 toast 说明（见 applyViewConstraints / guarded） */
+  .sys-switch[aria-disabled="true"] { opacity: .45; box-shadow: none; }
+  .sys-switch[aria-disabled="true"]:hover {
+    border-color: var(--line); color: var(--muted); background: var(--card); cursor: not-allowed;
+  }
+  .sys-switch[aria-pressed="true"][aria-disabled="true"] { color: #fff; }
   /* 学制（63/54 单选组）与特殊教育（独立开关）之间的分隔线 */
   .view-switch-divider { width: 1px; height: 18px; background: var(--line); flex: 0 0 auto; }
 
@@ -285,11 +297,20 @@
   .row label { flex: 1 1 130px; min-width: 110px; }
   #token { max-width: 360px; }
   @media (max-width: 720px) {
-    .wrap { padding: 18px 12px 40px; }
+    .wrap { padding: 18px 12px 40px; padding-bottom: calc(40px + env(safe-area-inset-bottom)); }
     .row { gap: 10px; }
     .row label { flex: 1 1 100%; }
+    /* 字段独占一行后控件撑满，避免右侧参差留白 */
+    .row label[data-dim] select, #f-kw { width: 100%; min-width: 0; }
+    .kw-input { width: 100%; }
     #token { max-width: 100%; }
     #output { width: 100%; }
+    /* 取消目录表内层纵向滚动，改随整页滚动，避免移动端嵌套滚动手感差 */
+    .cat-table-wrap { max-height: none; }
+    /* 触控目标放大（原始尺寸低于 44px 推荐值） */
+    .chip button { padding: 6px 10px; font-size: 16px; }
+    button.act-btn { padding: 8px 12px; }
+    .sys-switch { padding: 10px 14px; }
     .seal { width: 44px; height: 44px; font-size: 22px; }
     .top h1 { font-size: 22px; }
   }
@@ -308,7 +329,7 @@
     </div>
     <div class="top-meta">
       <!-- 发版时与 version_info.txt 的 FileVersion 同步修改（此处仅为加载前的兜底显示） -->
-      <span class="ver" id="app-ver">v1.3.3</span>
+      <span class="ver" id="app-ver">v1.4.1</span>
       <a href="https://github.com/tau625/ShudaoLe" target="_blank" rel="noopener">GitHub 项目页</a>
     </div>
   </header>
@@ -327,11 +348,16 @@
       <span class="view-switch-label">教材视图</span>
       <span class="sys-switch-group" role="radiogroup" aria-label="学制切换">
         <button type="button" id="switch-63" class="sys-switch" aria-pressed="true" title="常规教材：小学6年+初中3年（全国大多数地区）">六三学制</button>
-        <button type="button" id="switch-54" class="sys-switch" aria-pressed="false" title="五·四学制教材：小学5年+初中4年">五四学制</button>
+        <button type="button" id="switch-54" class="sys-switch" aria-pressed="false" title="五四学制教材：小学5年+初中4年">五四学制</button>
       </span>
       <span class="view-switch-divider" aria-hidden="true"></span>
       <span class="sys-switch-group">
         <button type="button" id="switch-spec" class="sys-switch" aria-pressed="false" title="只显示特殊教育学校（盲校/聋校/培智）教材">特殊教育</button>
+      </span>
+      <span class="view-switch-divider" aria-hidden="true"></span>
+      <span class="sys-switch-group" role="radiogroup" aria-label="用书类型切换">
+        <button type="button" id="switch-stu" class="sys-switch" aria-pressed="true" title="默认视图：学生教材与读本（二态合计覆盖全部教材，无遗漏）">学生用书</button>
+        <button type="button" id="switch-tea" class="sys-switch" aria-pressed="false" title="教师教学用书 / 教参（教师视图）">教师用书</button>
       </span>
       <span class="view-switch-hint">切换后，下方学段/年级等选项会随之联动</span>
     </div>
@@ -341,13 +367,17 @@
       <label data-dim="subject">科目 <select id="f-subject"></select></label>
       <label data-dim="publisher">版本 <select id="f-publisher"></select></label>
       <label data-dim="volume">册次 <select id="f-volume"></select></label>
-      <label>关键词 <input id="f-kw" type="text" placeholder="书名 / 科目 / 版本，支持 册次:上册" style="width:170px"></label>
+      <label>关键词 <input id="f-kw" class="kw-input" type="text" placeholder="书名 / 科目 / 版本，支持 册次:上册"></label>
+      <button id="btn-reset-filters" type="button" class="ghost small-btn" hidden
+              title="清空全部筛选条件，用书视图回到默认">重置</button>
     </div>
     <div id="filter-chips" class="chips" hidden></div>
     <div class="cat-result-bar">
       <span id="cat-count">命中 0 条</span>
+      <button id="btn-cart" class="ghost small-btn" hidden title="查看下方下载清单">清单 <b id="cart-n">0</b> 条</button>
       <button id="btn-add-all" class="primary small-btn" disabled>全部加入下载列表</button>
-      <span class="cat-row-note">点"加入"会把教材链接追加到下方下载列表，再点"开始下载"即可</span>
+      <button id="btn-export-csv" class="ghost small-btn" hidden title="导出当前列表为 CSV 文件">导出 CSV</button>
+      <span class="cat-row-note">点「加入」会把教材链接追加到下方下载列表，再点「开始下载」即可</span>
     </div>
     <div class="table-wrap cat-table-wrap">
       <table>
@@ -398,6 +428,7 @@
     <h2><span class="step">3</span>下载任务
       <button id="btn-clear-links" class="ghost small-btn h2-right" title="清空下方链接输入框">清空链接</button>
     </h2>
+    <div id="cart-summary" class="cart-summary" hidden></div>
     <textarea id="links" rows="7" placeholder="每行一个教材详情页链接或 contentId，支持 # 注释。例如:&#10;https://basic.smartedu.cn/tchMaterial/detail?contentType=assets_document&amp;contentId=xxxxxxxx&amp;catalogType=tchMaterial&amp;subCatalog=tchMaterial"></textarea>
     <div class="link-meta">
       <span id="link-count"></span>
@@ -441,7 +472,7 @@
             <th>信息</th>
           </tr>
         </thead>
-        <tbody id="tasks"><tr><td colspan="4" class="empty">尚无任务，请在上方粘贴链接后点击"开始下载"</td></tr></tbody>
+        <tbody id="tasks"><tr><td colspan="4" class="empty">尚无任务，请在上方粘贴链接后点击「开始下载」</td></tr></tbody>
       </table>
     </div>
   </section>
@@ -491,7 +522,7 @@
   function render(s) {
     const tb = $('#tasks');
     if (!s.items.length) {
-      tb.innerHTML = '<tr><td colspan="4" class="empty">尚无任务，请在上方粘贴链接后点击"开始下载"</td></tr>';
+      tb.innerHTML = '<tr><td colspan="4" class="empty">尚无任务，请在上方粘贴链接后点击「开始下载」</td></tr>';
     } else {
       tb.innerHTML = s.items.map(it => {
         let bar, size = '';
@@ -569,6 +600,9 @@
     const removed = lines.length - kept.length;
     if (removed > 0) {
       ta.value = kept.length ? kept.join('\n') + '\n' : '';
+      syncAddedFromLinks();   // 清单文本变了，同步对账“已加入”状态（否则按钮与清单脱节）
+      renderRows();
+      refreshCart();
       toast(`已自动清除 ${removed} 条已完成的链接，剩余 ${kept.length} 条待处理`, 'info');
     }
     return removed;
@@ -670,6 +704,9 @@
     if (!ta.value.trim()) { toast('链接列表已经是空的', 'info'); return; }
     ta.value = '';
     ta.focus();
+    syncAddedFromLinks();   // 清空清单后立刻回收目录表里的「已加入 ✓」状态
+    renderRows();
+    refreshCart();
     toast('已清空链接输入框', 'info');
   };
 
@@ -716,7 +753,7 @@
       stopAutoTokenPolling();
       $('#token').value = st.token;
       showTokenStatus('done', '✅ 已自动获取并保存令牌（来源：' + (st.message || '自动捕获') + '）。' +
-        '令牌已填入上方输入框并写入 token.txt，之后可直接点击"开始下载"。');
+        '令牌已填入上方输入框并写入 token.txt，之后可直接点击「开始下载」。');
       return;
     }
     if (st.phase === 'error') {
@@ -799,7 +836,11 @@
   let LABELS = {};        // 维度显示名
   let HINTS = [];         // 空结果时的放宽建议
   let TOTAL = 0;          // 命中总数（可能大于 ROWS.length）
-  let ADDED = new Set();  // 已加入下载列表的教材 id，用于按钮反馈
+  // 已加入下载清单的教材：id -> 来源视图快照。清单唯一真源是 #links 文本，
+  // ADDED 只是其派生视图（供按钮态/徽标/确认弹窗分组用），两者经
+  // syncAddedFromLinks() 随时对账，避免「已加入 ✓」与实际清单脱节。
+  let ADDED = new Map();
+  let ROW_BY_ID = {};     // 当前结果行索引（appendIds 打来源快照用）
   let reqSeq = 0;         // 请求序号：快速切换下拉时丢弃过期响应，避免旧结果盖掉新结果
   let appliedDefault = false;  // 首屏预选是否已应用过（只应用一次，用户清空后不再强制）
 
@@ -873,12 +914,105 @@
     const params = new URLSearchParams();
     const f = currentFilters();
     Object.keys(f).forEach(k => params.set(k, f[k]));
-    // 视图开关（63/54 单选 + 特教开关，见下方 SYS/SPEC 块）：63 视图排除五四变体与特殊学校教材
+    // 视图开关（63/54 单选 + 特教开关 + 用书二态，见下方 SYS/SPEC/AUD 块）：
+    // audience 由后端 AUDIENCE_EXCLUDE 语义解释——「学生用书」= 排除教师用书
+    // （未标注的 3070 条与学生读本自然包含），「教师用书」= 精确命中教师用书。
     params.set('system', SYS === '54' ? '五·四学制' : '六·三学制');
     params.set('school', SPEC ? '特殊学校' : '常规学校');
+    params.set('audience', AUD);
     const kw = $('#f-kw').value.trim();
     if (kw) params.set('keyword', kw);
     return params;
+  }
+
+  // ---------- 下载清单（#links）状态管理 ----------
+  // 清单是跨视图累积的“购物车”：切换 学制/特教/用书/筛选 只影响目录视图，
+  // 从不清空清单。为让“清单里有什么、来自哪个视图”可见，加入时快照来源视图，
+  // 汇总成结果栏徽标与卡片③的构成摘要；确认弹窗亦按此分组展示。
+  const ADDED_KEY = 'shudaole.added';
+
+  function loadAdded() {
+    try {
+      const o = JSON.parse(localStorage.getItem(ADDED_KEY) || '{}');
+      Object.keys(o).forEach(k => ADDED.set(k, o[k]));
+    } catch (e) { /* 存档损坏即视为空 */ }
+  }
+
+  function saveAdded() {
+    try {
+      const o = {};
+      ADDED.forEach((v, k) => { o[k] = v; });
+      localStorage.setItem(ADDED_KEY, JSON.stringify(o));
+    } catch (e) { /* 存不进则仅本次会话生效 */ }
+  }
+
+  // 从 #links 文本提取 contentId（兼容整行链接与裸 id 两种写法，忽略 # 注释行）
+  function linkIds() {
+    return $('#links').value.split('\n').map(s => s.trim())
+      .filter(s => s && !s.startsWith('#'))
+      .map(s => { const m = s.match(/contentId=([A-Za-z0-9-]+)/); return m ? m[1] : s; });
+  }
+
+  // 单一真源对账：任何渠道改动清单（手动编辑/自动清除/清空/找回链接/粘贴）
+  // 后调用本函数，保证 ADDED 与清单文本一致。新出现的行标记 manual（无来源视图）。
+  function syncAddedFromLinks() {
+    const ids = linkIds();
+    const alive = new Set(ids);
+    let changed = false;
+    ADDED.forEach((v, k) => { if (!alive.has(k)) { ADDED.delete(k); changed = true; } });
+    ids.forEach(id => {
+      if (!ADDED.has(id)) {
+        ADDED.set(id, { v: '', spec: null, tea: null, ph: '', t: '', manual: true });
+        changed = true;
+      }
+    });
+    if (changed) saveAdded();
+  }
+
+  // 加入时的来源视图快照（row 缺省 = 批量加全量时不在当前展示页的条目）
+  function viewSnapshot(row) {
+    return {
+      v: SYS, spec: !!SPEC, tea: AUD === '教师用书',
+      ph: (row && row.phase) || '', t: (row && row.title) || '',
+    };
+  }
+
+  function cartGroups() {
+    const g = {};
+    let tea = 0;
+    ADDED.forEach(info => {
+      const name = (info.manual || !info.v) ? '早前加入'
+        : (info.v === '54' ? '五四' : '六三') + (info.spec ? '·特教' : '');
+      g[name] = (g[name] || 0) + 1;
+      if (info.tea) tea++;
+    });
+    return { g, tea };
+  }
+
+  function cartSummaryText() {
+    const { g, tea } = cartGroups();
+    const parts = Object.keys(g).map(k => `${k} ${g[k]}`);
+    if (tea) parts.push(`教师用书 ${tea}`);
+    return parts.join(' · ') || '空';
+  }
+
+  // 徽标 + 摘要行刷新（appendIds / refreshMeta / 清理链接 后调用）
+  function refreshCart() {
+    const n = ADDED.size;
+    const btnCart = $('#btn-cart');
+    if (btnCart) {
+      btnCart.hidden = !n;
+      const num = $('#cart-n');
+      if (num) num.textContent = n;
+      btnCart.title = '清单构成：' + cartSummaryText() + '（点击查看清单）';
+    }
+    const sum = $('#cart-summary');
+    if (sum) {
+      sum.hidden = !n;
+      sum.innerHTML = n
+        ? '清单构成：<b>' + escapeHtml(cartSummaryText()) + '</b>（跨视图累积，切换筛选不会清空；下载前可再次核对）'
+        : '';
+    }
   }
 
   function appendIds(ids) {
@@ -888,19 +1022,33 @@
     let n = 0;
     ids.forEach(id => {
       const u = catLink(id);
-      if (!have.has(u)) { lines.push(u); have.add(u); ADDED.add(id); n++; }
+      if (!have.has(u)) { lines.push(u); have.add(u); n++; }
+      if (!ADDED.has(id)) ADDED.set(id, viewSnapshot(ROW_BY_ID[id]));
     });
     ta.value = lines.join('\n') + '\n';
     ta.scrollTop = ta.scrollHeight;
+    saveAdded();
+    refreshCart();
     return n;
   }
 
+  // 清空全部筛选（chips「清空全部」与筛选行「重置」共用），用书视图一并回到默认
+  function clearAllFilters() {
+    DIMS.forEach(d => { const el = $('#f-' + d); if (el) el.value = ''; });
+    $('#f-kw').value = '';
+    AUD = '学生用书';
+    viewsSave(); viewsSync();
+    reload();
+  }
+
   // 已选条件一览 + 一键清空。级联筛选下很容易忘记自己选过什么，没有它就只能
-  // 挨个下拉去找、挨个拨回"全部"。
+  // 挨个下拉去找、挨个拨回"全部"。筛选行尾的「重置」按钮与这里的可见性同步。
   function renderChips() {
     const box = $('#filter-chips');
     const f = currentFilters();
     const keys = Object.keys(f);
+    const resetBtn = $('#btn-reset-filters');
+    if (resetBtn) resetBtn.hidden = !keys.length;
     if (!keys.length) { box.hidden = true; box.innerHTML = ''; return; }
     box.hidden = false;
     box.innerHTML = '<span class="chips-label">已选条件</span>'
@@ -910,11 +1058,7 @@
     box.querySelectorAll('button[data-clear]').forEach(b => {
       b.onclick = () => { const el = $('#f-' + b.dataset.clear); if (el) el.value = ''; reload(); };
     });
-    $('#btn-clear-filters').onclick = () => {
-      DIMS.forEach(d => { const el = $('#f-' + d); if (el) el.value = ''; });
-      $('#f-kw').value = '';
-      reload();
-    };
+    $('#btn-clear-filters').onclick = clearAllFilters;
   }
 
   function renderRows() {
@@ -926,17 +1070,40 @@
     btnAll.disabled = !ROWS.length;
     btnAll.textContent = truncated && TOTAL
       ? `全部加入下载列表（${TOTAL}）` : '全部加入下载列表';
+    ROW_BY_ID = {};
+    ROWS.forEach(x => { ROW_BY_ID[x.id] = x; });
+    const btnCsv = $('#btn-export-csv');
+    if (btnCsv) {
+      btnCsv.hidden = !ROWS.length;
+      btnCsv.title = truncated
+        ? `导出当前展示的前 ${ROWS.length} 条为 CSV 文件`
+        : '导出当前列表为 CSV 文件';
+    }
 
     if (!ROWS.length) {
-      const tips = HINTS.map(h =>
-        `<button class="ghost small-btn" data-relax="${escapeHtml(h.dim)}">`
-        + `去掉「${escapeHtml(h.label)}：${escapeHtml(h.value)}」→ ${h.count} 条</button>`).join('');
+      // 放宽建议里的「用途」条件特殊：用书视图是二态常选，不存在“去掉”后的空态，
+      // 译成“改看另一类用书”（后端给的 count 是完全去掉限制的命中数，故不回显数字）
+      const tips = HINTS.map(h => {
+        if (h.dim === 'audience') {
+          const other = AUD === '教师用书' ? '学生' : '教师';
+          return `<button class="ghost small-btn" data-relax="audience">改看${other}用书</button>`;
+        }
+        return `<button class="ghost small-btn" data-relax="${escapeHtml(h.dim)}">`
+          + `去掉「${escapeHtml(h.label)}：${escapeHtml(h.value)}」→ ${h.count} 条</button>`;
+      }).join('');
       tbody.innerHTML = `<tr><td colspan="6" class="empty"><div>没有匹配的教材。`
         + (tips ? `放宽其中一个条件即可找回结果：</div><div class="hint-row">${tips}</div>`
                 : `试试放宽筛选条件</div>`)
         + `</td></tr>`;
       tbody.querySelectorAll('button[data-relax]').forEach(b => {
-        b.onclick = () => { const el = $('#f-' + b.dataset.relax); if (el) el.value = ''; reload(); };
+        b.onclick = () => {
+          if (b.dataset.relax === 'audience') {
+            AUD = AUD === '教师用书' ? '学生用书' : '教师用书';
+            viewsSave(); viewsSync(); reload();
+            return;
+          }
+          const el = $('#f-' + b.dataset.relax); if (el) el.value = ''; reload();
+        };
       });
       return;
     }
@@ -947,9 +1114,7 @@
       const done = ADDED.has(x.id);
       return `
       <tr>
-        <td class="name" title="${escapeHtml(x.title)}">${escapeHtml(x.title)}`
-        + (x.kind && x.kind !== 'textbook' ? '<span class="kind-tag">课件/资源</span>' : '')
-        + `</td>
+        <td class="name" title="${escapeHtml(x.title)}">${escapeHtml(x.title)}</td>
         <td>${escapeHtml(x.grade || '-')}</td>
         <td>${escapeHtml(x.subject || '-')}</td>
         <td>${escapeHtml(x.volume || x.module || '-')}</td>
@@ -981,6 +1146,14 @@
     const seq = ++reqSeq;
     const params = filterParams();
     if (refresh) params.set('refresh', '1');
+    // 加载反馈：表区降透明度 + 状态小字。旧内容保留可对照，但明确标出"正在更新"
+    const tableWrap = document.querySelector('.cat-table-wrap');
+    const statusEl = $('#cat-status');
+    if (tableWrap) tableWrap.classList.add('is-refreshing');
+    if (!refresh) {
+      statusEl.textContent = ROWS.length ? '更新中...' : '加载中...';
+      statusEl.className = 'cat-status';
+    }
     try {
       const r = await fetch('/api/facets?' + params.toString());
       const j = await r.json();
@@ -994,6 +1167,7 @@
       }
       // 首屏替用户预选（如只开放小学时默认选小学）。否则用户面对的是全部学段
       // 几千条混杂结果，而其它学段又因禁选点不动，得自己先想明白怎么回事。
+      // （audience 走视图按钮不走下拉，其默认值已在 SYS/SPEC/AUD 初始化时落实）
       if (!appliedDefault && j.default_filters) {
         appliedDefault = true;
         let changed = false;
@@ -1006,13 +1180,52 @@
       renderFilters();
       renderChips();
       renderRows();
+      applyViewConstraints();
       // 数量统一由 cat-count 呈现，避免标题栏与结果栏两处数字打架
       $('#cat-status').textContent = '';
       $('#cat-status').className = 'cat-status';
     } catch (e) {
-      $('#cat-status').textContent = '目录加载失败，请点击"刷新目录"重试';
+      $('#cat-status').textContent = '目录加载失败，请点击「刷新目录」重试';
       $('#cat-status').className = 'cat-status cat-err';
+    } finally {
+      if (tableWrap) tableWrap.classList.remove('is-refreshing');
     }
+  }
+
+  // ---------- 视图互斥防呆（数据驱动，不硬编码“特教无五四”） ----------
+  // 级联 facets 天然携带“切换某开关后会命中几条”的答案：system 候选在排除学制、
+  // 保留其余条件（含 school）的池子上统计；school/audience 候选同理。候选为 0 的
+  // 开关置灰防呆；未来平台若给特教教材补标学制，按钮会自动恢复可用。
+  // 规则：当前已选中的开关永不置灰——用户必须能点出去，此时的空结果页放宽建议负责指路。
+  function setBlocked(btn, blocked, msg) {
+    if (!btn) return;
+    if (!btn.dataset.tip) btn.dataset.tip = btn.title || '';
+    if (blocked) {
+      btn.setAttribute('aria-disabled', 'true');
+      btn.dataset.blockMsg = msg;
+      btn.title = msg;
+    } else {
+      btn.removeAttribute('aria-disabled');
+      delete btn.dataset.blockMsg;
+      btn.title = btn.dataset.tip;
+    }
+  }
+
+  function applyViewConstraints() {
+    let c54 = 0, cSpec = 0, cTea = 0;
+    (FACETS.system || []).forEach(f => { if (f.value === '五·四学制') c54 += f.count; });
+    (FACETS.school || []).forEach(f => {
+      if (f.value === '盲校' || f.value === '聋校' || f.value === '培智') cSpec += f.count;
+    });
+    (FACETS.audience || []).forEach(f => { if (f.value === '教师用书') cTea += f.count; });
+    setBlocked($('#switch-54'), SYS !== '54' && c54 === 0,
+      SPEC ? '特殊教育教材暂无五四学制版本，已保持六三学制'
+           : '当前条件下暂无五四学制教材');
+    setBlocked($('#switch-spec'), !SPEC && cSpec === 0,
+      SYS === '54' ? '五四学制下暂无特殊教育教材，请先切回六三学制'
+                   : '当前条件下暂无特殊教育教材');
+    setBlocked($('#switch-tea'), AUD !== '教师用书' && cTea === 0,
+      '当前条件下暂无教师用书');
   }
 
   // 用选择器统一绑定下拉：DIMS 由后端动态下发，写死在初始化时容易漏绑
@@ -1040,56 +1253,121 @@
         if (j.ok && j.ids && j.ids.length) {
           const n = appendIds(j.ids);
           renderRows();
-          toast(`已加入 ${n} 条（共 ${TOTAL} 条）`, 'info');
+          toast(`已加入 ${n} 条，清单共 ${ADDED.size} 条`, 'info');
           return;
         }
       } catch (e) { /* 取全量失败则回退为只加当前展示的 */ }
     }
     const n = appendIds(ROWS.map(x => x.id));
     renderRows();
-    toast(`已加入 ${n} 条`, 'info');
+    toast(`已加入 ${n} 条，清单共 ${ADDED.size} 条`, 'info');
   };
 
-  /* ---------- 视图开关：63/54 学制单选 + 特殊教育独立开关（纯新增，不改动上方任何逻辑） ---------- */
+  // 清单徽标：让“清单里已经攒了多少、来自哪些视图”在加入入口处可见。
+  // 点击滚动到卡片③并短暂高亮输入框。清单是跨视图累积的购物车，切换筛选不清空。
+  $('#btn-cart').onclick = () => {
+    const ta = $('#links');
+    ta.closest('section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    ta.classList.add('flash');
+    setTimeout(() => ta.classList.remove('flash'), 1200);
+  };
+
+  // 导出当前筛选结果为 CSV（带 BOM，Excel 直接打开不乱码）
+  $('#btn-export-csv').onclick = () => {
+    if (!ROWS.length) return;
+    const esc = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+    const lines = [['教材名称', '年级', '科目', '册次', '版本', '用书'].join(',')].concat(
+      ROWS.map(x => [
+        x.title, x.grade || '', x.subject || '', x.volume || x.module || '',
+        [x.publisher, x.pub_variant].filter(Boolean).join(' · '),
+        x.audience === '教师用书' ? '教师用书' : (x.audience || '学生用书'),
+      ].map(esc).join(',')));
+    const blob = new Blob(['\ufeff' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = '书单.csv';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  // 筛选行「重置」：与 chips 的「清空全部」同一逻辑（含用书视图复位）
+  $('#btn-reset-filters').onclick = clearAllFilters;
+
+  /* ---------- 视图开关：63/54 学制单选 + 特殊教育独立开关 + 学生/教师用书二态 ---------- */
   // 与后端 dim_match 兜底语义配套的约定：
   //   SYS='63'（默认）= 常规教材：system=六·三学制（平台未标注学制即常规）
   //                     + school=常规学校（排除盲校/聋校/培智）
   //   SYS='54'        = system=五·四学制；SPEC=true = school=特殊学校（学段下拉仍可继续筛）
-  // 63/54 是单选组（必有一个亮，默认 63）；特殊教育是独立开关，可与任一学制组合。
+  //   AUD（二态单选，默认学生用书）= audience 参数。后端「学生用书」= 排除教师用书
+  //                     （3070 条未标注与学生读本自然包含），「教师用书」= 精确命中；
+  //                     两态合计即全部教材，无遗漏，故不需要第三个“全部”态。
+  // 63/54 与 学生/教师用书 是单选组（必有一个亮）；特殊教育是独立开关，可与任一学制组合。
   // 选择持久化在 localStorage('shudaole.views')，下次进入自动恢复。
   // 注意：必须定义在首个 reload() 之前，否则首屏请求会因变量未初始化走错视图。
-  var SYS = '63', SPEC = false;
+  var SYS = '63', SPEC = false, AUD = '学生用书';
+
+  function viewsSave() {
+    try {
+      localStorage.setItem('shudaole.views',
+        JSON.stringify({ sys: SYS, spec: SPEC, tea: AUD === '教师用书' }));
+    } catch (e) { /* 隐私模式等场景存不进就仅本次会话生效 */ }
+  }
+
+  function viewsSync() {
+    $('#switch-63').setAttribute('aria-pressed', String(SYS === '63'));
+    $('#switch-54').setAttribute('aria-pressed', String(SYS === '54'));
+    $('#switch-spec').setAttribute('aria-pressed', String(SPEC));
+    $('#switch-stu').setAttribute('aria-pressed', String(AUD === '学生用书'));
+    $('#switch-tea').setAttribute('aria-pressed', String(AUD === '教师用书'));
+  }
+
   (function () {
     try {
       const saved = JSON.parse(localStorage.getItem('shudaole.views') || '{}');
       // 兼容旧版存档（v1.3.9 首版用 sys54 布尔），有则迁移
       if (saved.sys === '54' || saved.sys54 === true) SYS = '54';
       SPEC = saved.spec === true;
+      // v1.5 新增用书二态：旧存档无 tea 字段，缺省即学生用书
+      if (saved.tea === true) AUD = '教师用书';
     } catch (e) { /* 存档损坏即回默认 63 */ }
 
-    const btn63 = $('#switch-63');
-    const btn54 = $('#switch-54');
-    const btnSpec = $('#switch-spec');
-
-    function saveViews() {
-      try {
-        localStorage.setItem('shudaole.views',
-          JSON.stringify({ sys: SYS, spec: SPEC }));
-      } catch (e) { /* 隐私模式等场景存不进就仅本次会话生效 */ }
+    // 防呆包装：被 applyViewConstraints 置灰（aria-disabled）的开关点击时只解释不放行。
+    // 不用 HTML disabled——它吞掉点击事件，触屏/键盘用户将得不到“为什么点不动”。
+    function guarded(btn, fn) {
+      btn.addEventListener('click', () => {
+        if (btn.getAttribute('aria-disabled') === 'true') {
+          toast(btn.dataset.blockMsg || '当前条件下该选项不可用', 'info');
+          return;
+        }
+        fn();
+      });
     }
-    function syncUI() {
-      btn63.setAttribute('aria-pressed', String(SYS === '63'));
-      btn54.setAttribute('aria-pressed', String(SYS === '54'));
-      btnSpec.setAttribute('aria-pressed', String(SPEC));
-    }
+    guarded($('#switch-63'), () => { if (SYS !== '63') { SYS = '63'; viewsSave(); viewsSync(); reload(); } });
+    guarded($('#switch-54'), () => { if (SYS !== '54') { SYS = '54'; viewsSave(); viewsSync(); reload(); } });
+    guarded($('#switch-spec'), () => { SPEC = !SPEC; viewsSave(); viewsSync(); reload(); });
+    guarded($('#switch-stu'), () => { if (AUD !== '学生用书') { AUD = '学生用书'; viewsSave(); viewsSync(); reload(); } });
+    guarded($('#switch-tea'), () => { if (AUD !== '教师用书') { AUD = '教师用书'; viewsSave(); viewsSync(); reload(); } });
 
-    // 学制组为单选：点击已选中项不动作，不可取消（始终亮一个）
-    btn63.onclick = () => { if (SYS !== '63') { SYS = '63'; saveViews(); syncUI(); reload(); } };
-    btn54.onclick = () => { if (SYS !== '54') { SYS = '54'; saveViews(); syncUI(); reload(); } };
-    btnSpec.onclick = () => { SPEC = !SPEC; saveViews(); syncUI(); reload(); };
+    // radiogroup 方向键导航（WAI-ARIA 惯例）：Left/Up 上一项，Right/Down 下一项。
+    // 走 click() 复用 guarded 逻辑——置灰项只提示不切换。
+    document.querySelectorAll('.sys-switch-group[role="radiogroup"]').forEach(grp => {
+      grp.addEventListener('keydown', ev => {
+        if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].indexOf(ev.key) < 0) return;
+        const btns = Array.prototype.slice.call(grp.querySelectorAll('.sys-switch'));
+        const cur = btns.indexOf(document.activeElement);
+        if (cur < 0) return;
+        ev.preventDefault();
+        const delta = (ev.key === 'ArrowLeft' || ev.key === 'ArrowUp') ? btns.length - 1 : 1;
+        const next = btns[(cur + delta) % btns.length];
+        next.focus();
+        next.click();
+      });
+    });
 
-    syncUI();
+    viewsSync();
   })();
+
+  loadAdded();
 
   reload();
   refresh();
@@ -1114,9 +1392,12 @@
         } else if (j.cancelled) {
           // 用户主动取消：不报错，保持原值
         } else {
-          addLogLine('目录选择失败: ' + (j.error || '未知错误，请重试'));
+          const msg = '目录选择失败：' + (j.error || '未知错误，请重试');
+          toast(msg);
+          addLogLine(msg);
         }
       } catch (e) {
+        toast('无法连接服务，目录选择失败');
         addLogLine('无法连接服务选择目录');
       } finally {
         btnBrowse.disabled = false;
@@ -1141,8 +1422,13 @@
         body: JSON.stringify({ path: p, mode: mode }),
       });
       const j = await r.json().catch(() => ({}));
-      if (!r.ok) addLogLine((j.error || '打开失败') + '：' + p);
+      if (!r.ok) {
+        const msg = (j.error || '打开失败') + '：' + p;
+        toast(msg);
+        addLogLine(msg);
+      }
     } catch (e) {
+      toast('无法连接服务，打开文件失败');
       addLogLine('无法连接服务打开文件');
     } finally {
       btn.disabled = false;
@@ -1170,6 +1456,10 @@
       const n = linksTa.value.split('\n')
         .filter(s => s.trim() && !s.trim().startsWith('#')).length;
       countEl.textContent = n ? n + ' 条链接' : '';
+      // 清单文本可能被任何渠道改动（手动编辑/粘贴/找回链接/程序化赋值），
+      // 每次刷新都对账 ADDED 与徽标，保证「已加入 ✓」和构成摘要不脱节
+      syncAddedFromLinks();
+      refreshCart();
       const has = $('#token').value.trim().length > 0;
       badgeEl.textContent = has ? '已设置' : '未设置';
       badgeEl.className = 'token-badge ' + (has ? 'ok' : 'warn');
@@ -1238,6 +1528,11 @@
         var box = document.getElementById('links');
         if (box) {
           box.value = (d.entries || []).join('\n');
+          // 对账清单状态：恢复的行无来源视图快照，归入「早前加入」组
+          if (typeof syncAddedFromLinks === 'function') {
+            syncAddedFromLinks();
+            if (typeof refreshCart === 'function') refreshCart();
+          }
           bar.remove();
         }
       };
@@ -1282,7 +1577,8 @@
     bar.appendChild(btnView);
     if (info.zip_url) {
       var btnDl = document.createElement('button');
-      btnDl.textContent = '手动更新';
+      btnDl.textContent = '下载安装包';
+      btnDl.title = '用浏览器下载新版本安装包，自行决定安装时机';
       btnDl.style.cssText = 'padding:3px 10px;border:1px solid #1d4f76;' +
         'border-radius:4px;background:#fff;color:#1d4f76;cursor:pointer';
       btnDl.onclick = function () {
@@ -1527,7 +1823,7 @@
       row.insertBefore(btnView, btnClose);
       // 手动更新：交给浏览器下载更新包，用户自己决定何时安装（程序内不干预）
       if (latest.zip_url) {
-        var btnManual = mkBtn('手动更新');
+        var btnManual = mkBtn('下载安装包');
         btnManual.title = '用浏览器下载更新包，自行决定安装时机';
         btnManual.onclick = function () {
           fetch('/api/open', { method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -1674,8 +1970,23 @@
       (missing ? '（<span style="color:#a05a2c">' + missing + ' 条链接未识别，下载时将按链接处理</span>）' : '') +
       '　→　<span style="color:#666">' + escapeHtml(outDir || (window.__DEF_OUT_DIR__ || 'downloads')) + '</span></div>';
     var MAXSHOW = 50;
+    // 按「来源视图 · 学段」分组展示：清单是跨视图累积的，平铺列表看不出
+    // “六三制加的”和“五四制加的”，分组后用户核对时对得上自己的操作轨迹。
+    // 分组信息优先取加入时的快照（ADDED），找不到（手动粘贴/早前恢复）归入「早前加入」。
+    var lastG = null;
     var rows = entries.slice(0, MAXSHOW).map(function (e) {
-      return '<div style="padding:3px 0;border-bottom:1px dashed #eee">' +
+      var info = (typeof ADDED !== 'undefined' && ADDED.get) ? ADDED.get(e.id) : null;
+      var g = (!info || info.manual || !info.v) ? '早前加入'
+        : (info.v === '54' ? '五四' : '六三') + (info.spec ? '·特教' : '')
+          + (info.tea ? '·教师用书' : '');
+      var head = '';
+      if (g !== lastG) {
+        head = '<div style="margin:6px 0 2px;font-size:12px;font-weight:600;color:#6b5d45">── '
+          + escapeHtml(g) + ' ──</div>';
+        lastG = g;
+      }
+      return head +
+        '<div style="padding:3px 0;border-bottom:1px dashed #eee">' +
         (e.multi_version_risk ? '<span style="color:#c47b3a">⚠</span> ' : '') +
         '<b>' + escapeHtml(e.title) + '</b>' +
         '<span style="color:#888">　' + escapeHtml([e.grade, e.subject].filter(Boolean).join(' · ')) + '</span>' +
@@ -1710,11 +2021,24 @@
   var btnStart = document.getElementById('btn-start');
   if (btnStart) {
     var origStart = btnStart.onclick;      // 保留主脚本绑定的原下载逻辑
+    // 确认后到后端翻转 running 之间有窗口期，先禁用+改文案防连点重复提交；
+    // 完成后立即拉一次状态，把按钮态交还给 render() 按真实 running 判断。
+    function startNow() {
+      btnStart.disabled = true;
+      btnStart.textContent = '提交中…';
+      Promise.resolve(origStart ? origStart() : null)
+        .catch(function () {})
+        .then(function () {
+          btnStart.textContent = '开始下载';
+          return fetch('/api/status').then(function (r) { return r.json(); }).then(render);
+        })
+        .catch(function () { btnStart.disabled = false; });
+    }
     btnStart.onclick = function () {
       var linksText = (document.getElementById('links') || {}).value || '';
       var ids = linksText.split('\n').map(function (l) { return l.trim(); })
         .filter(function (l) { return l && l.indexOf('#') !== 0; });
-      if (!ids.length) { if (origStart) origStart(); return; }   // 空列表走原逻辑（会提示）
+      if (!ids.length) { startNow(); return; }   // 空列表走原逻辑（会提示）
       var qs = 'ids=' + encodeURIComponent(ids.join(','));
       fetch('/api/resolve-entries?' + qs)
         .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
@@ -1722,14 +2046,12 @@
           var outDir = ((document.getElementById('output') || {}).value || '').trim()
             || (window.__DEF_OUT_DIR__ || 'downloads');
           if (!res.ok || !res.j.entries) {
-            confirmDialog([], ids.length, outDir, function () { if (origStart) origStart(); });
+            confirmDialog([], ids.length, outDir, startNow);
             return;
           }
-          confirmDialog(res.j.entries, res.j.missing || 0, outDir, function () {
-            if (origStart) origStart();
-          });
+          confirmDialog(res.j.entries, res.j.missing || 0, outDir, startNow);
         })
-        .catch(function () { if (origStart) origStart(); });      // 网络异常不拦下载
+        .catch(function () { startNow(); });      // 网络异常不拦下载
     };
   }
 

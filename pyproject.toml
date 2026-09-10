@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "shudaole"
 # 注意：发版仍以 version_info.txt 为版本号单一来源（exe 属性与界面都从它解析）；
 # 此字段仅用于源码安装（pip install .）时的元数据，发版时顺手同步即可。
-version = "1.3.3"
+version = "1.4.1"
 description = "书到了 ShudaoLe — 国家中小学智慧教育平台教材 PDF 下载工具"
 readme = "README.md"
 requires-python = ">=3.8"
