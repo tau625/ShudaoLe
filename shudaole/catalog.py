@@ -42,6 +42,10 @@ def fetch_catalog_index(force=False, timeout=60, on_log=None):
             data = json.loads(CATALOG_CACHE.read_text(encoding="utf-8"))
             if data.get("items") and time.time() - data.get("fetched_at", 0) < CATALOG_TTL:
                 items = data["items"]
+                # 结构闸：条目必须是 dict 列表（缓存半截/被改写时防下游崩溃）
+                if not isinstance(items, list) or not all(
+                        isinstance(x, dict) for x in items[:5]):
+                    raise TypeError("缓存条目结构异常")
                 if data.get("schema") != CATALOG_SCHEMA:
                     log("缓存格式已升级，正在就地重新整理...")
                     items = normalize_catalog(items)
@@ -50,24 +54,48 @@ def fetch_catalog_index(force=False, timeout=60, on_log=None):
                 return items
         except (OSError, ValueError):
             pass
+        except Exception:
+            # 缓存损坏自愈：normalize/回写/结构校验的任何意外失败都不再
+            # 裸 traceback 崩溃，忽略缓存走网络分支重新下载
+            log("本地缓存损坏，已忽略并重新下载")
 
     items, seen = [], set()
     for p in CATALOG_PARTS:
         data, last_err = None, None
         for host in (1, 2, 3):  # s-file-1/2/3 互为镜像
             try:
+                # validate_public_http_url 也纳入 try：域名解析失败（DownloadError）
+                # 同样计入 last_err 并轮换下一个镜像，而不是让整次抓取直接崩溃。
+                # 校验保持内联包裹请求地址（勿拆中间变量）。
                 resp = requests.get(
                     validate_public_http_url(CATALOG_URL.format(n=host, p=p)),
                     headers={"User-Agent": UA}, timeout=timeout)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    break
-                last_err = f"HTTP {resp.status_code}"
             except requests.RequestException as e:
                 last_err = type(e).__name__
+                continue
+            except DownloadError as e:
+                last_err = str(e)
+                continue
+            if resp.status_code != 200:
+                last_err = f"HTTP {resp.status_code}"
+                continue
+            try:
+                data = resp.json()
+            except ValueError:
+                last_err = "响应非 JSON（可能为平台错误页）"
+                continue
+            if not isinstance(data, list):
+                # 结构闸：平台接口改版可能返回 dict/其它结构；镜像同源，
+                # 换域名无意义，直接按失败处理并在分片层面报出原因
+                last_err = "数据格式异常（非数组，平台接口可能已改版）"
+                data = None
+                break
+            break
         if data is None:
             raise DownloadError(f"目录分片 part_{p} 获取失败（{last_err}），请稍后重试")
         for row in data:
+            if not isinstance(row, dict):   # 单条结构异常跳过，不让整片报废
+                continue
             cid = row.get("id")
             title = (row.get("title") or "").strip()
             if not cid or cid in seen or not title:
@@ -81,6 +109,9 @@ def fetch_catalog_index(force=False, timeout=60, on_log=None):
             items.append(entry)
         log(f"目录分片 part_{p} 完成，累计 {len(items)} 条教材")
 
+    if len(items) < 1000:
+        # sanity：完整目录约 4 万条；骤降说明分片数量/地址可能已变更
+        log(f"警告：目录条目数异常偏少（仅 {len(items)} 条），平台分片可能已变更")
     items = normalize_catalog(items)
     _write_catalog_cache(items, log)
     return items
@@ -438,6 +469,10 @@ DIM_LABELS = {
 
 DIM_ALIASES = {
     "grade": GRADE_ALIASES,
+    # 学校类型口语写法：用户凭直觉常输入「普通学校」，统一映射到哨兵值
+    # 「常规学校」（真实哨兵值只有 特殊学校/常规学校，见 SCHOOL_SENTINELS），
+    # 否则该输入走子串匹配永远命中 0 条
+    "school": {"普通学校": "常规学校"},
     # 学制口语写法（CLI --system 六三学制 等）统一到规范值
     "system": {"六三学制": "六·三学制", "六·三": "六·三学制",
                "54学制": "五·四学制", "五四学制": "五·四学制",

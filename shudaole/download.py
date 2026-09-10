@@ -145,12 +145,12 @@ class ProgressPrinter:
 
     def __init__(self, label, total):
         self.label = (label or "下载")[:20]
-        self.total = total
+        self.total = total or 0   # 长度未知（无/畸形 Content-Length）归一为 0，防 None 比较崩溃
         self.downloaded = 0
         self._last_len = 0
         self._bar = None
         if HAS_TQDM:
-            self._bar = tqdm(total=total if total > 0 else None,
+            self._bar = tqdm(total=self.total if self.total > 0 else None,
                              unit="B", unit_scale=True, unit_divisor=1024,
                              desc=self.label, leave=False)
 
@@ -231,6 +231,7 @@ def download_file(urls, dest, session, retries=3, timeout=30, label="", on_progr
     成功返回 True；需要令牌抛 NeedAuthError；其余失败抛 DownloadError。
     on_progress: 进度回调 on_progress(已下载字节, 总字节)；传入后不再使用控制台进度显示。"""
     last_err = None
+    saw_other_err = False   # 除 404/410 外是否还出现过其它失败原因
     for url in urls:
         for attempt in range(1, max(1, retries) + 1):
             tmp = dest.with_name(dest.name + ".part")
@@ -255,13 +256,17 @@ def download_file(urls, dest, session, retries=3, timeout=30, label="", on_progr
                     raise DownloadError(f"HTTP {resp.status_code}")
 
                 continuing = (resp.status_code == 206)
-                if continuing:                  # Content-Range: bytes a-b/total
-                    _, _, rng = (resp.headers.get("Content-Range") or "").partition("/")
-                    total = int(rng or 0) or None
-                else:
-                    total = int(resp.headers.get("Content-Length") or 0) or None
-                    if resume:                  # 服务端忽略 Range -> 从头写
-                        resume = 0
+                total = None
+                try:                            # 畸形长度头按未知长度处理，仅靠 PDF 校验收尾
+                    if continuing:              # Content-Range: bytes a-b/total
+                        _, _, rng = (resp.headers.get("Content-Range") or "").partition("/")
+                        total = int(rng) or None
+                    else:
+                        total = int(resp.headers.get("Content-Length") or 0) or None
+                except ValueError:
+                    total = None
+                if not continuing and resume:   # 服务端忽略 Range -> 从头写
+                    resume = 0
                 sent = resume
                 progress = None if on_progress is not None else ProgressPrinter(label, total)
                 if on_progress is not None:
@@ -301,17 +306,36 @@ def download_file(urls, dest, session, retries=3, timeout=30, label="", on_progr
                 raise                            # 保留 .part，下次可续传
             except (IncompleteDownload, TransientError) as e:
                 last_err = e                     # 保留 .part，下轮续传/重试
+                saw_other_err = True
             except BadContentError as e:
                 _cleanup(tmp)                    # 内容损坏，不能续传，整份重来
                 last_err = e
+                saw_other_err = True
             except (requests.RequestException, OSError) as e:
                 last_err = e                     # 网络/磁盘错误，保留 .part 续传
+                saw_other_err = True
+            except DownloadError as e:
+                # 其余 4xx（404/410 等）：同址重试毫无意义，记录后立即跳出
+                # attempt 循环换下一个候选地址（镜像/-private 变体/固定模板），
+                # 全部候选耗尽后才聚合报错——此前直接冲出双重循环，其余候选
+                # 全部不再尝试
+                last_err = e
+                if not str(e).startswith(("HTTP 404", "HTTP 410")):
+                    saw_other_err = True
+                break
             finally:
                 if resp is not None:
                     resp.close()
             if attempt < max(1, retries):
                 time.sleep(min(2 ** (attempt - 1), 4))  # 退避 1s/2s/4s
-    raise DownloadError(str(last_err) if last_err else "未知错误")
+    if last_err is None:
+        raise DownloadError("未知错误")
+    msg = str(last_err)
+    if not saw_other_err:
+        # 全部候选都返回 404/410：大概率资源已下架或接口改版，附核对指引
+        msg += ("；资源可能已被平台下架或下载接口已改版，"
+                "请到 basic.smartedu.cn 网页端核对该教材是否仍可在线阅读")
+    raise DownloadError(msg)
 
 
 
@@ -606,7 +630,7 @@ def download_many(entries, out_dir, auth, retries=3, timeout=30,
             res = _result(entry, item.get("title"), "fail", "已取消")
         except Exception as e:  # 未预料异常不拖垮整个池
             res = _result(entry, item.get("title"), "fail",
-                          f"未预料异常: {type(e).__name__}: {e}")
+                          f"未预料异常: {type(e).__name__}: {redact_token(e)}")
         # ok/skip 时提取落盘路径供界面跳转
         if res["status"] == "ok":
             item["file"] = res.get("msg") or ""

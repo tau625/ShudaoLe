@@ -411,17 +411,6 @@ def update_install():
 
 
 # ---------- 下载目录选择 & 打开文件/目录 ----------
-def _extract_path(msg):
-    """从'文件已存在，跳过: <路径>'这类文案中提取存在的路径"""
-    if not msg:
-        return ""
-    idx = msg.find(".pdf")
-    if idx != -1:
-        cand = msg[max(0, msg.rfind(":", 0, idx) + 1): idx + 4].strip()
-        return cand if os.path.exists(cand) else ""
-    return ""
-
-
 def _is_within(path, base):
     """路径包含校验：path 规范化后必须位于 base 目录内（含相等）"""
     try:
@@ -734,6 +723,18 @@ def parse_entries(links_text):
     return list(dict.fromkeys(entries))
 
 
+def clamp_result_limit(raw, default=300, upper=2000):
+    """把界面传入的结果条数钳制到 [1, upper]。
+
+    无下界钳制时负数会得到 matches[:-1] 这类静默截断（少给结果却像成功）；
+    非数字回退 default。"""
+    try:
+        value = int(raw)
+    except (TypeError, ValueError):
+        return default
+    return max(1, min(value, upper))
+
+
 # ---------- 教材目录（内存缓存 + 核心模块磁盘缓存） ----------
 _CATALOG = {"items": None}
 _CATALOG_LOCK = threading.Lock()
@@ -855,36 +856,43 @@ def run_task(payload):
 
     _th.Thread(target=_periodic_save, daemon=True).start()
 
-    download_many(
-        entries, out_dir, auth, retries=retries, timeout=timeout,
-        workers=workers, flat_name=flat_name, on_log=None,
-        on_item_start=_on_start, on_item_done=_on_done,
-        on_progress=_on_progress, cancel_event=cancel_event,
-    )
-    _stop_save.set()
-
-    ok = sum(1 for x in items if x["status"] == "ok")
-    skip = sum(1 for x in items if x["status"] == "skip")
-    fail = sum(1 for x in items if x["status"] == "fail")
-    canceled = STATE["cancel"]
-    # 全部到达终态即视为完成，清除持久化；有未完成条目（取消/崩溃）保留供恢复
-    unfinished = [x for x in items if x["status"] not in ("ok", "skip", "fail")]
-    if not unfinished:
-        tasks_store.clear_session()
-    else:
+    try:
+        download_many(
+            entries, out_dir, auth, retries=retries, timeout=timeout,
+            workers=workers, flat_name=flat_name, on_log=None,
+            on_item_start=_on_start, on_item_done=_on_done,
+            on_progress=_on_progress, cancel_event=cancel_event,
+        )
+    except Exception as e:
+        # 编排层自身抛异常时也必须走收尾：否则 STATE["running"] 永远为 True
+        # （界面永久 409「任务运行中」），守护线程因 _stop_save 永远等不到置位
+        # 而每 2 秒无限重写 tasks.json
+        add_log(f"未预料的下载编排异常: {e}")
+    finally:
+        _stop_save.set()
+        ok = sum(1 for x in items if x["status"] == "ok")
+        skip = sum(1 for x in items if x["status"] == "skip")
+        fail = sum(1 for x in items if x["status"] == "fail")
+        canceled = STATE["cancel"]
+        # 全部到达终态即视为完成，清除持久化；有未完成条目（取消/崩溃）保留供恢复
+        unfinished = [x for x in items if x["status"] not in ("ok", "skip", "fail")]
+        if not unfinished:
+            tasks_store.clear_session()
+        else:
+            with LOCK:
+                tasks_store.save_session({
+                    "entries": entries, "out_dir": str(out_dir),
+                    "workers": workers, "flat_name": flat_name,
+                    "items": [dict(x) for x in items],
+                })
         with LOCK:
-            tasks_store.save_session({
-                "entries": entries, "out_dir": str(out_dir),
-                "workers": workers, "flat_name": flat_name,
-                "items": [dict(x) for x in items],
-            })
-    with LOCK:
-        STATE["running"] = False
-        STATE["cancel"] = False  # 重置取消标志，避免界面按钮卡在"正在停止..."
-        STATE["finished_at"] = datetime.now().strftime("%H:%M:%S")
-        STATE["summary"] = {"ok": ok, "skip": skip, "fail": fail, "total": len(items)}
-    add_log(f"任务结束: 成功 {ok} | 跳过 {skip} | 失败 {fail}（共 {len(items)}）"
-            + ("（用户停止）" if canceled else ""))
+            STATE["running"] = False
+            STATE["cancel"] = False  # 重置取消标志，避免界面按钮卡在"正在停止..."
+            STATE["finished_at"] = datetime.now().strftime("%H:%M:%S")
+            STATE["summary"] = {"ok": ok, "skip": skip, "fail": fail,
+                                "total": len(items)}
+        add_log(f"任务结束: 成功 {ok} | 跳过 {skip} | 失败 {fail}（共 {len(items)}）"
+                + ("（用户停止）" if canceled else ""))
 
 
 # ---------- HTTP 服务 ----------
@@ -975,10 +983,7 @@ class Handler(BaseHTTPRequestHandler):
                    if k in FILTER_DIMS and (v[0] or "").strip()}
         keyword = (q.get("keyword") or [""])[0].strip()
         include_resources = (q.get("include_resources") or ["0"])[0] in ("1", "true")
-        try:
-            limit = int((q.get("limit") or ["300"])[0])
-        except ValueError:
-            limit = 300
+        limit = clamp_result_limit((q.get("limit") or ["300"])[0])
         try:
             items = get_catalog(refresh=refresh)
             # ids_only：只要 id 列表，供"全部加入下载列表"绕开界面展示条数上限，

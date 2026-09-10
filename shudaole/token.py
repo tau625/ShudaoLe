@@ -54,7 +54,9 @@ except ImportError:  # 兜底（本模块不应脱离包单独运行，仅保险
 
 # ============ 常量 ============
 DEFAULT_TRIGGER_CID = "bdc00134-465d-454b-a541-dcd0cec4d86e"
-LOGIN_HOST_HINTS = ("sso.", "auth.smartedu")
+# 失败出口统一引导：教用户手动取令牌（界面有折叠说明），并提示鉴权可能变更
+MANUAL_TOKEN_HINT = ("；可改用浏览器 F12 → 网络/Network → 复制 x-nd-auth "
+                     "手动粘贴（见界面折叠说明）；若反复失败，可能是平台鉴权方式已变更")
 TRIGGER_URL_TPL = (
     "https://basic.smartedu.cn/tchMaterial/detail?contentType=assets_document"
     "&contentId={cid}&catalogType=tchMaterial&subCatalog=tchMaterial"
@@ -480,8 +482,9 @@ def run_token_fetch(trigger_content=DEFAULT_TRIGGER_CID, token_file=None,
 
     if not ws_url:
         p = {"ok": False,
-             "error": ("浏览器进程意外退出，无法启动调试会话"
-                       if proc.poll() is not None else "等待浏览器调试接口超时")}
+             "error": (("浏览器进程意外退出，无法启动调试会话"
+                        if proc.poll() is not None else "等待浏览器调试接口超时")
+                       + MANUAL_TOKEN_HINT)}
         emit(p)
         _kill(proc)
         return 5, p
@@ -515,14 +518,21 @@ def run_token_fetch(trigger_content=DEFAULT_TRIGGER_CID, token_file=None,
     def try_capture(params):
         nonlocal captured
         try:
-            headers = params.get("request", {}).get("headers", {})
-            tok = (headers.get("x-nd-auth") or headers.get("X-ND-Auth") or "").strip()
+            # 双路取值：requestWillBeSent 的头在 params["request"]["headers"]，
+            # 而 requestWillBeSentExtraInfo 的头在顶层 params["headers"]——
+            # 只查前者会让 ExtraInfo 分支永远取不到值（死代码）
+            headers = (params.get("headers")
+                       or (params.get("request") or {}).get("headers") or {})
+            tok = ""
+            for k, v in headers.items():
+                if str(k).lower() == "x-nd-auth":
+                    tok = str(v or "").strip()
+                    break
+            # 放宽为「存在合法长度（≥10 字符）的 x-nd-auth 头即捕获」：
+            # 浏览器跑在独立 profile 里只会加载平台页面，原先按 URL 域名
+            # （-private/ykt.cbern/basic.smartedu）过滤在平台改版换域名时
+            # 会成为捕获盲区
             if not tok or len(tok) < 10 or tok in seen:
-                return
-            url = params.get("request", {}).get("url", "")
-            # 只看对私有资源/主站资源发起的请求，过滤匿名占位
-            if not ("-private" in url or "x-nd-auth" in url
-                    or "ykt.cbern" in url or "basic.smartedu" in url):
                 return
             seen.add(tok)
             captured = tok
@@ -567,7 +577,8 @@ def run_token_fetch(trigger_content=DEFAULT_TRIGGER_CID, token_file=None,
                     else:
                         _hint("正在触发资源加载并捕获令牌...", last_wait_hint, emit)
         except OSError:
-            p = {"ok": False, "error": "与浏览器的连接已断开（窗口可能被关闭）"}
+            p = {"ok": False,
+                 "error": "与浏览器的连接已断开（窗口可能被关闭）" + MANUAL_TOKEN_HINT}
             emit(p)
             _kill(proc)
             return 6, p
@@ -590,7 +601,8 @@ def run_token_fetch(trigger_content=DEFAULT_TRIGGER_CID, token_file=None,
         return 0, p
 
     p = {"ok": False,
-         "error": f"等待 {timeout} 秒仍未捕获到令牌（可能未登录或窗口被关闭）"}
+         "error": (f"等待 {timeout} 秒仍未捕获到令牌（可能未登录或窗口被关闭）"
+                   + MANUAL_TOKEN_HINT)}
     emit(p)
     _shutdown_browser(debug_port, proc)
     return 3, p

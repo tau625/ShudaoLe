@@ -266,7 +266,7 @@ def build_arg_parser():
     parser.add_argument("--system", metavar="学制",
                         help="筛选学制（六三学制/五四学制 等）")
     parser.add_argument("--school", metavar="学校",
-                        help="筛选学校类型（普通学校/盲校/聋校/培智学校 等）")
+                        help="筛选学校类型（常规学校/特殊学校/盲校/聋校/培智）")
     parser.add_argument("--editor", metavar="主编",
                         help="筛选主编/作者（如 主编:吴欣 或直接 吴欣）")
     parser.add_argument("--module", metavar="模块",
@@ -342,6 +342,17 @@ def run_downloads(ordered, args):
 
 
 
+def wants_catalog_search(args):
+    """是否应进入目录搜索模式：给了 --search 或 FILTER_DIMS 中任一筛选维度。
+
+    此前只硬编码检查 search/phase/grade/subject/publisher 五个参数，
+    `--audience 教师用书` 单独使用时会漏判，静默掉进交互式粘贴链接分支。
+    改为从 FILTER_DIMS 全量构建，新增维度自动覆盖。"""
+    if getattr(args, "search", None):
+        return True
+    return any(getattr(args, d, None) for d in FILTER_DIMS)
+
+
 def main(argv=None):
     attach_console()  # P1-3：logging 输出走裸格式控制台，与旧版 print 一致
     from . import pubs as _pubs
@@ -351,7 +362,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
 
     # 目录搜索模式：给了任一搜索/筛选参数即触发
-    if any([args.search, args.phase, args.grade, args.subject, args.publisher]):
+    if wants_catalog_search(args):
         return run_catalog_search(args)
 
     # 收集输入：位置参数 + 文件；都为空且是终端 -> 交互模式

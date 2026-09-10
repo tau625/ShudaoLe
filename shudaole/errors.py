@@ -20,7 +20,6 @@ class IncompleteDownload(Exception):
 
 class TransientError(Exception):
     """服务端临时故障（5xx / 429），稍后重试通常可恢复。"""
-    """响应内容不是有效 PDF"""
 
 
 

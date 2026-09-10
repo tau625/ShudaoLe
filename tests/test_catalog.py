@@ -1,7 +1,11 @@
 # -*- coding: utf-8 -*-
-"""目录模块测试：规范化、级联筛选、分面、缓存原子写。"""
+"""目录模块测试：规范化、级联筛选、分面、缓存原子写、抓取自愈。"""
 import json
+import re
+import time
 
+import pytest
+import requests_mock as rm_module
 
 from shudaole import catalog
 from shudaole.catalog import (
@@ -9,6 +13,127 @@ from shudaole.catalog import (
     publisher_facets, publisher_label, search_catalog, _write_catalog_cache,
     relax_suggestions, PUB_GROUPS, SUPPORTED_SCOPE,
 )
+
+
+@pytest.fixture
+def requests_mock():
+    with rm_module.Mocker() as m:
+        yield m
+
+
+# ---------- fetch_catalog_index：分片抓取失败面（2026-09-10 回归锁） ----------
+
+_PARTS_RE = re.compile(
+    r"https://s-file-[123]\.ykt\.cbern\.com\.cn/zxx/ndrs/resources"
+    r"/tch_material/part_10[0-3]\.json")
+
+_ROWS = [
+    {"id": "cid-1", "title": "数学 七年级 下册",
+     "tag_list": [{"tag_dimension_id": "zxxxd", "tag_name": "初中"},
+                  {"tag_dimension_id": "zxxnj", "tag_name": "七年级"},
+                  {"tag_dimension_id": "zxxxk", "tag_name": "数学"},
+                  {"tag_dimension_id": "zxxbb", "tag_name": "人教版"}]},
+    {"id": "cid-2", "title": "语文 一年级 上册",
+     "tag_list": [{"tag_dimension_id": "zxxxd", "tag_name": "小学"},
+                  {"tag_dimension_id": "zxxnj", "tag_name": "一年级"},
+                  {"tag_dimension_id": "zxxxk", "tag_name": "语文"}]},
+]
+
+
+def _mock_parts(requests_mock, **kwargs):
+    requests_mock.get(_PARTS_RE, **kwargs)
+
+
+def test_fetch_catalog_non_json_response(requests_mock, tmp_path, monkeypatch):
+    """200 + HTML 错误页：报「非 JSON」而不是裸 JSONDecodeError traceback。"""
+    monkeypatch.setattr(catalog, "CATALOG_CACHE", tmp_path / "cache.json")
+    monkeypatch.setattr(catalog, "validate_public_http_url", lambda url: url)
+    _mock_parts(requests_mock, text="<html>platform error page</html>")
+    from shudaole.errors import DownloadError
+    with pytest.raises(DownloadError) as ei:
+        catalog.fetch_catalog_index(force=True)
+    assert "非 JSON" in str(ei.value)
+
+
+def test_fetch_catalog_non_list_payload(requests_mock, tmp_path, monkeypatch):
+    """200 + dict（接口改版）：报「格式异常」而不是 AttributeError。"""
+    monkeypatch.setattr(catalog, "CATALOG_CACHE", tmp_path / "cache.json")
+    monkeypatch.setattr(catalog, "validate_public_http_url", lambda url: url)
+    _mock_parts(requests_mock, json={"code": 1, "message": "error"})
+    from shudaole.errors import DownloadError
+    with pytest.raises(DownloadError) as ei:
+        catalog.fetch_catalog_index(force=True)
+    assert "格式异常" in str(ei.value)
+
+
+def test_fetch_catalog_skips_non_dict_rows(requests_mock, tmp_path, monkeypatch):
+    """分片里混入非 dict 行：跳过该行，整片其余条目照常入库。"""
+    monkeypatch.setattr(catalog, "CATALOG_CACHE", tmp_path / "cache.json")
+    monkeypatch.setattr(catalog, "validate_public_http_url", lambda url: url)
+    _mock_parts(requests_mock, json=[_ROWS[0], "garbage-row", None, _ROWS[1]])
+    items = catalog.fetch_catalog_index(force=True)
+    assert [it["id"] for it in items] == ["cid-1", "cid-2"]
+
+
+def test_fetch_catalog_dns_failure_rotates_host(requests_mock, tmp_path, monkeypatch):
+    """s-file-1 域名解析失败（DownloadError）：轮换 s-file-2/3 而非整次失败。"""
+    monkeypatch.setattr(catalog, "CATALOG_CACHE", tmp_path / "cache.json")
+    from shudaole.errors import DownloadError as _DE
+
+    def flaky_validate(url):
+        if "s-file-1" in url:
+            raise _DE("域名解析失败: s-file-1.ykt.cbern.com.cn")
+        return url
+    monkeypatch.setattr(catalog, "validate_public_http_url", flaky_validate)
+    for n in (2, 3):
+        for p in (100, 101, 102, 103):
+            requests_mock.get(
+                f"https://s-file-{n}.ykt.cbern.com.cn/zxx/ndrs/resources"
+                f"/tch_material/part_{p}.json", json=_ROWS)
+    items = catalog.fetch_catalog_index(force=True)
+    assert len(items) == 2
+
+
+def test_fetch_catalog_cache_garbage_json_self_heals(requests_mock, tmp_path,
+                                                     monkeypatch):
+    """缓存文件是垃圾（非法 JSON）：静默忽略并走网络重新抓取。"""
+    cache = tmp_path / "catalog_cache.json"
+    cache.write_text("{不是合法的 JSON!!!", encoding="utf-8")
+    monkeypatch.setattr(catalog, "CATALOG_CACHE", cache)
+    monkeypatch.setattr(catalog, "validate_public_http_url", lambda url: url)
+    _mock_parts(requests_mock, json=_ROWS)
+    items = catalog.fetch_catalog_index(force=False)
+    assert [it["id"] for it in items] == ["cid-1", "cid-2"]
+    # 自愈成功后新缓存已写回（合法 JSON）
+    assert json.loads(cache.read_text(encoding="utf-8"))["items"]
+
+
+def test_fetch_catalog_cache_broken_structure_self_heals(requests_mock, tmp_path,
+                                                         monkeypatch):
+    """缓存是合法 JSON 但结构损坏（items 非列表）：
+    记日志「本地缓存损坏」并走网络分支，不再裸 traceback。"""
+    cache = tmp_path / "catalog_cache.json"
+    cache.write_text(json.dumps({"items": "一坨损坏的数据",
+                                 "fetched_at": time.time(),
+                                 "schema": catalog.CATALOG_SCHEMA}),
+                     encoding="utf-8")
+    monkeypatch.setattr(catalog, "CATALOG_CACHE", cache)
+    monkeypatch.setattr(catalog, "validate_public_http_url", lambda url: url)
+    _mock_parts(requests_mock, json=_ROWS)
+    logs = []
+    items = catalog.fetch_catalog_index(force=False, on_log=logs.append)
+    assert [it["id"] for it in items] == ["cid-1", "cid-2"]
+    assert any("本地缓存损坏" in m for m in logs)
+
+
+def test_fetch_catalog_tiny_result_warns(requests_mock, tmp_path, monkeypatch):
+    """抓取结果远小于正常规模（~4 万条）时给「分片可能已变更」警告。"""
+    monkeypatch.setattr(catalog, "CATALOG_CACHE", tmp_path / "cache.json")
+    monkeypatch.setattr(catalog, "validate_public_http_url", lambda url: url)
+    _mock_parts(requests_mock, json=_ROWS)
+    logs = []
+    catalog.fetch_catalog_index(force=True, on_log=logs.append)
+    assert any("异常偏少" in m for m in logs)
 
 
 # ---------- dim_match ----------
@@ -139,6 +264,18 @@ def test_school_sentinels():
         assert dim_match(it, "school", "常规学校") is False
     assert dim_match(normal, "school", "常规学校") is True
     assert dim_match(normal, "school", "特殊学校") is False
+
+
+def test_school_alias_common_school():
+    """「普通学校」是口语直觉写法，经 DIM_ALIASES 映射到哨兵值「常规学校」，
+    不再走子串匹配而永远命中 0 条。"""
+    blind = _it(school="盲校")
+    normal = _it(school="")
+    assert dim_match(normal, "school", "普通学校") is True
+    assert dim_match(blind, "school", "普通学校") is False
+    # 端到端：search_catalog 全链路同样生效
+    items = [normal, blind]
+    assert [it["school"] for it in search_catalog(items, school="普通学校")] == [""]
 
 
 def test_system_views_partition_catalog(sample_items):
