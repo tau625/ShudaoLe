@@ -1,0 +1,23 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.12.0.schema.json
+PackageIdentifier: tau625.ShudaoLe
+PackageVersion: 1.5.0
+InstallerType: inno
+InstallModes:
+- interactive
+- silent
+- silentWithProgress
+InstallerSwitches:
+  Silent: /VERYSILENT /NORESTART
+  SilentWithProgress: /SILENT /NORESTART
+UpgradeBehavior: install
+Installers:
+- Architecture: x64
+  InstallerUrl: https://github.com/tau625/ShudaoLe/releases/download/v1.5.0/ShudaoLe-1.5.0-setup.exe
+  InstallerSha256: 352c3418af3902986b4f4e267409f1797d5d8d93e0f3ec00dac057ac25e52149
+  ElevationRequirement: elevationRequired
+  AppsAndFeaturesEntries:
+  - DisplayName: 书到了（ShudaoLe）
+    Publisher: tau625
+    DisplayVersion: 1.5.0
+ManifestType: installer
+ManifestVersion: 1.12.0
