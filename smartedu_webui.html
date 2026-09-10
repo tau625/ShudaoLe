@@ -558,7 +558,7 @@
     <div class="row">
       <label>保存目录
         <span class="dir-input">
-          <input id="output" type="text" value="downloads">
+          <input id="output" type="text" placeholder="留空则保存到系统下载目录">
           <button id="btn-browse" type="button" class="ghost small-btn"
                   title="用资源管理器选择保存目录">浏览…</button>
         </span>
@@ -833,7 +833,7 @@
   $('#btn-start').onclick = async () => {
     const body = {
       links_text: $('#links').value,
-      output_dir: $('#output').value.trim() || (window.__DEF_OUT_DIR__ || 'downloads'),
+      output_dir: $('#output').value.trim() || window.__DEF_OUT_DIR__ || '',
       token: $('#token').value.trim(),
       save_token: $('#save_token').checked,
       flat_name: $('#flat_name').checked,
@@ -1644,8 +1644,9 @@
 
   loadAdded();
 
-  reload();
-  refresh();
+  // reload() / refresh() 延迟到 block 4 的 fetch 包装器（捕获 quick_combos 与
+  // publisher meta）就绪后由该包装器末尾统一调用——否则首次 /api/facets 响应
+  // 绕过包装器，renderCombos 不会被触发，常用组合在首次加载时不出现。
 
   /* ---------- 浏览选择目录 & 打开文件/目录 ---------- */
   const outEl = $('#output');
@@ -2302,7 +2303,7 @@ function openOverlayModal(overlay, box) {
       '请核对版本是否为孩子学校所用（悬浮版本名可见识别提示）</div>';
     html += '<div style="margin-bottom:4px">将下载 <b>' + entries.length + '</b> 本教材' +
       (missing ? '（<span style="color:var(--warning-fg)">' + missing + ' 条链接未识别，下载时将按链接处理</span>）' : '') +
-      '　→　<span style="color:var(--muted)">' + escapeHtml(outDir || (window.__DEF_OUT_DIR__ || 'downloads')) + '</span></div>';
+      '　→　<span style="color:var(--muted)">' + escapeHtml(outDir || window.__DEF_OUT_DIR__ || '（使用系统默认目录）') + '</span></div>';
     var MAXSHOW = 50;
     // 按「来源视图 · 学段」分组展示：清单是跨视图累积的，平铺列表看不出
     // “六三制加的”和“五四制加的”，分组后用户核对时对得上自己的操作轨迹。
@@ -2378,7 +2379,7 @@ function openOverlayModal(overlay, box) {
         .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
         .then(function (res) {
           var outDir = ((document.getElementById('output') || {}).value || '').trim()
-            || (window.__DEF_OUT_DIR__ || 'downloads');
+            || window.__DEF_OUT_DIR__ || '';
           if (!res.ok || !res.j.entries) {
             confirmDialog([], ids.length, outDir, startNow);
             return;
@@ -2458,6 +2459,10 @@ function openOverlayModal(overlay, box) {
       return resp;
     });
   };
+  // 首次加载：包装器已就绪，首次 /api/facets 响应会被捕获并触发
+  // renderCombos + publisher meta。放在包装器设置之后确保不绕过。
+  reload();
+  refresh();
 })();
 
 // 保存目录提示 + 默认值统一（纯展示代码，不改既有 JS 逻辑与元素 id）。
@@ -2520,9 +2525,9 @@ function openOverlayModal(overlay, box) {
 
     var input = document.getElementById('output');
     if (input && DEF_ABS) {
-      // 首次进入（或仍是旧的相对默认值）时回填绝对路径，与启动位置解耦
+      // 首次进入时回填服务器注入的绝对路径，与启动位置解耦
       var cur = (input.value || '').trim();
-      if (!cur || cur === 'downloads') input.value = DEF_ABS;
+      if (!cur) input.value = DEF_ABS;
     }
     if (input) {
       // 用 addEventListener 追加，绝不覆盖既有 onchange / onclick
