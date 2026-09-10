@@ -150,6 +150,19 @@ def _migrate_profile():
 
 
 # ============ 令牌落盘（统一读写口，供 CLI / GUI / 自动抓取共用） ============
+def _safe_base(base_dir):
+    """兜底目录入参防路径穿越：拒绝空字节与「..」上跳成分（正常调用只传
+    程序目录常量）。不合规返回 None，调用方回落默认配置目录。"""
+    if not base_dir:
+        return None
+    base = str(base_dir)
+    if "\x00" in base:
+        return None
+    if ".." in os.path.normpath(base).replace("\\", "/").split("/"):
+        return None
+    return base
+
+
 def token_save_path(base_dir=None):
     """令牌文件写入路径：优先用户配置目录 ~/.config/shudaole/token.txt。
 
@@ -157,6 +170,7 @@ def token_save_path(base_dir=None):
     保持旧版行为。读取方（smartedu_downloader.initial_token）按
     「配置目录 > 程序目录」顺序找，两处都能命中。
     """
+    base_dir = _safe_base(base_dir)
     cfg = os.path.join(config_dir(), "token.txt")
     try:
         os.makedirs(config_dir(), exist_ok=True)
@@ -174,16 +188,23 @@ def token_save_path(base_dir=None):
 def write_token(token, base_dir=None):
     """把令牌写入 token_save_path，POSIX 下收紧到属主可读写（600）。
     返回实际写入路径；失败返回 None（不抛异常——令牌还能通过内存使用）。"""
-    path = token_save_path(base_dir)
+    base = _safe_base(base_dir)
+    target = Path(token_save_path(base)).resolve()
+    # 包含关系校验（防 base_dir 派生路径穿越）：落盘目标 resolve 后必须位于
+    # 允许根——用户配置目录或合法兜底目录——之内，穿越路径会 relative_to
+    # 失败或带「..」成分；不过则跳过落盘（令牌仍可经内存使用，不影响功能）。
+    root = Path(base or config_dir()).resolve()
+    if not path_is_relative_to(target, root) or ".." in target.parts:
+        print("[shudaole] 令牌路径未通过安全校验，跳过落盘", file=sys.stderr)
+        return None
     try:
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(token.strip() or "")
+        target.write_text(token.strip() or "", encoding="utf-8")
         if os.name != "nt":
             try:
-                os.chmod(path, 0o600)
+                os.chmod(str(target), 0o600)
             except OSError:
                 pass
-        return path
+        return str(target)
     except OSError as e:
         print(f"[shudaole] 令牌落盘失败: {e}", file=sys.stderr)
         return None
@@ -192,6 +213,7 @@ def write_token(token, base_dir=None):
 def read_token(base_dir=None):
     """读取已存令牌：配置目录优先，其次程序目录（历史位置）。
     返回去除首尾空白的令牌字符串；没有则返回 None。"""
+    base_dir = _safe_base(base_dir)
     candidates = [os.path.join(config_dir(), "token.txt")]
     if base_dir:
         candidates.append(os.path.join(str(base_dir), "token.txt"))

@@ -83,9 +83,45 @@ def _gh_token() -> str | None:
     return None
 
 
+def _safe_version(version: str) -> str:
+    """版本号会拼进下载 URL 与清单落盘路径：只接受严格字符集，
+    拒绝路径穿越与 URL 拼接逃逸（../、分隔符、scheme 等）。"""
+    if not re.fullmatch(r"[0-9A-Za-z][0-9A-Za-z._-]*", version or "") \
+            or ".." in version:
+        sys.exit(f"版本号含非法字符：{version!r}")
+    return version
+
+
+def _assert_safe_url(url: str) -> None:
+    """SSRF 防护：仅允许 http/https；host 拒绝 localhost、环回、私有和保留
+    地址（含裸 IP），域名仅放行 GitHub 官方下载域。"""
+    import ipaddress
+    import urllib.parse
+    u = urllib.parse.urlsplit(url)
+    if u.scheme not in ("http", "https"):
+        sys.exit(f"拒绝非 http(s) 请求地址：{url}")
+    host = (u.hostname or "").lower()
+    if not host or host == "localhost":
+        sys.exit(f"拒绝环回地址：{url}")
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        ip = None
+    if ip is not None:
+        if (ip.is_private or ip.is_loopback or ip.is_reserved
+                or ip.is_link_local or ip.is_multicast or ip.is_unspecified):
+            sys.exit(f"拒绝私有/保留地址：{url}")
+        sys.exit(f"拒绝非 GitHub 官方下载域：{url}")   # 裸 IP 一律不放行
+    if not (host == "github.com" or host.endswith(".github.com")
+            or host.endswith(".githubusercontent.com")):
+        sys.exit(f"拒绝非 GitHub 官方下载域：{url}")
+
+
 def fetch_setup_sha256(version: str) -> str:
     """从 Release 的 SHA256SUMS.txt 取安装器哈希：先试直接下载，失败走 gh API。"""
+    version = _safe_version(version)
     url = f"{REPO_URL}/releases/download/v{version}/SHA256SUMS.txt"
+    _assert_safe_url(url)
     try:
         import urllib.request
         text = urllib.request.urlopen(url, timeout=30).read().decode("utf-8")
@@ -199,7 +235,7 @@ def main() -> None:
     g.add_argument("--fetch", action="store_true", help="从 GitHub Release 的 SHA256SUMS.txt 获取")
     args = ap.parse_args()
 
-    version = args.version or read_version()
+    version = _safe_version(args.version or read_version())
 
     if args.sha256:
         sha256 = args.sha256.lower()

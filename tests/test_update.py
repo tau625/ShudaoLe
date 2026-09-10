@@ -157,7 +157,7 @@ def test_download_update_tries_mirror_then_direct(tmp_path, monkeypatch):
     monkeypatch.setattr(_ur.OpenerDirector, "open", fake_open)
     path, err = upd.download_update(
         "https://github.com/tau625/ShudaoLe/releases/download/v1/x.exe",
-        "x.exe", dest_dir=tmp_path)
+        "ShudaoLe-1.4.1-setup.exe", dest_dir=tmp_path)
     assert path == ""
     assert len(calls) == len(upd.mirror_prefixes()) + 1   # 镜像全部试过 + 直连
     assert calls[-1].startswith("https://github.com/")    # 直连是最后一个

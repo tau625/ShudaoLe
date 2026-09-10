@@ -162,3 +162,92 @@ def test_name_registry_threaded_claim(tmp_path):
     for t in threads:
         t.join()
     assert len(set(names)) == 8
+
+
+# ---------- 2026-09-10：路径穿越 / SSRF 加固（安全扫描高危项回归） ----------
+def test_token_save_path_rejects_traversal_base(tmp_path, monkeypatch):
+    """base_dir 带「..」上跳成分或空字节时拒绝兜底目录，回落配置目录。"""
+    import os as _os
+    from shudaole import token as token_mod
+    cfg_dir = tmp_path / "cfg"
+    cfg_dir.mkdir()
+    monkeypatch.setenv("SHUDAOLE_CONFIG_DIR", str(cfg_dir))
+    evil = str(tmp_path / "out" / ".." / ".." / "elsewhere")
+    assert token_mod.token_save_path(evil) == str(cfg_dir / "token.txt")
+    assert token_mod.token_save_path("with\x00nul") == str(cfg_dir / "token.txt")
+    # 合法程序目录：配置目录探测失败（不可写）时才走兜底，返回 base/token.txt
+    real_makedirs = _os.makedirs
+
+    def denied_makedirs(path, *a, **k):
+        if str(path) == str(cfg_dir):
+            raise OSError("denied for test")
+        return real_makedirs(path, *a, **k)
+
+    monkeypatch.setattr(_os, "makedirs", denied_makedirs)
+    good = tmp_path / "prog"
+    good.mkdir()
+    assert token_mod.token_save_path(str(good)) == str(good / "token.txt")
+
+
+def test_read_token_ignores_traversal_base(tmp_path, monkeypatch):
+    from shudaole import token as token_mod
+    cfg_dir = tmp_path / "cfg"
+    cfg_dir.mkdir()
+    (cfg_dir / "token.txt").write_text("T0KEN", encoding="utf-8")
+    monkeypatch.setenv("SHUDAOLE_CONFIG_DIR", str(cfg_dir))
+    evil = str(tmp_path / ".." / ".." / "elsewhere")
+    assert token_mod.read_token(evil) == "T0KEN"
+
+
+def test_download_update_rejects_bad_asset_name(tmp_path):
+    """asset_name 来自远端元数据：带分隔符/盘符/上跳成分的名字一律拒绝且不发起网络请求。"""
+    from shudaole import update as up
+    url = ("https://github.com/tau625/ShudaoLe/releases/download/v1.4.1/"
+           "ShudaoLe-1.4.1-setup.exe")
+    for bad in ("..\\..\\evil.exe", "../evil.exe", "/abs/path.exe", r"C:\evil.exe",
+                "..", "", "ShudaoLe-1.4.1-setup.exe\n"):
+        out, err = up.download_update(url, bad, dest_dir=tmp_path)
+        assert out == "", (bad, out)
+        assert "不合规" in err, (bad, err)
+    assert list(tmp_path.iterdir()) == []   # 未落任何文件
+
+
+def test_download_update_rejects_non_github_url(tmp_path):
+    from shudaole import update as up
+    out, err = up.download_update(
+        "https://evil.example.com/ShudaoLe-1.4.1-setup.exe",
+        "ShudaoLe-1.4.1-setup.exe", dest_dir=tmp_path)
+    assert out == "" and "GitHub" in err
+
+
+def _load_gen_manifests():
+    import importlib.util
+    from pathlib import Path
+    p = Path(__file__).resolve().parents[1] / "packaging" / "winget" / "gen_manifests.py"
+    spec = importlib.util.spec_from_file_location("gen_manifests", p)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def test_gen_manifests_safe_version_rejects_traversal():
+    gm = _load_gen_manifests()
+    with pytest.raises(SystemExit):
+        gm._safe_version("../../evil")
+    with pytest.raises(SystemExit):
+        gm._safe_version("1.4.1 extra")
+    assert gm._safe_version("1.4.1") == "1.4.1"
+
+
+def test_gen_manifests_assert_safe_url_blocks_non_github():
+    gm = _load_gen_manifests()
+    for bad in ("file:///c:/windows/system32",
+                "http://127.0.0.1:8765/x",
+                "http://localhost/x",
+                "https://192.168.1.10/x",
+                "https://evil.example.com/x"):
+        with pytest.raises(SystemExit):
+            gm._assert_safe_url(bad)
+    gm._assert_safe_url(
+        "https://github.com/tau625/ShudaoLe/releases/download/v1.4.1/SHA256SUMS.txt")
+    gm._assert_safe_url("https://objects.githubusercontent.com/x")

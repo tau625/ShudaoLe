@@ -21,7 +21,7 @@ import shutil
 import subprocess
 import sys
 import threading
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 
 RELEASE_API = "https://api.github.com/repos/tau625/ShudaoLe/releases/latest"
 MIRROR_ENV = "SHUDAOLE_UPDATE_MIRROR"   # 用户自定义镜像前缀，设置后覆盖内置列表
@@ -174,7 +174,19 @@ def download_update(asset_url, asset_name, expected_sha=None, dest_dir=None,
             or host.endswith(".github.com")):
         return "", "更新包地址不是 GitHub 官方链接，已拒绝下载"
 
-    dest_dir = Path(dest_dir) if dest_dir else Path.home() / ".config" / "shudaole" / "updates"
+    # asset_name 与 dest_dir 都按不可信字符串处理（前者来自远端 Release 元数据，
+    # 后者是调用方入参）：同函数内清洗 + 显式拒绝上跳成分后，才参与落盘路径拼接。
+    safe_name = PureWindowsPath(asset_name).name if asset_name else ""
+    if (not safe_name or safe_name != asset_name
+            or ".." in PureWindowsPath(safe_name).parts
+            or not re.fullmatch(r"ShudaoLe-[0-9A-Za-z._-]+", safe_name)):
+        return "", f"更新包文件名不合规，已拒绝下载：{asset_name!r}"
+    asset_name = safe_name
+
+    default_dir = Path.home() / ".config" / "shudaole" / "updates"
+    dest_dir = (Path(dest_dir) if dest_dir else default_dir).resolve()
+    if ".." in dest_dir.parts:
+        return "", "更新缓存目录含非法路径成分，已拒绝"
     try:
         dest_dir.mkdir(parents=True, exist_ok=True)
     except OSError as e:
@@ -191,7 +203,9 @@ def download_update(asset_url, asset_name, expected_sha=None, dest_dir=None,
             with opener.open(req, timeout=60) as r:
                 total = int(r.headers.get("Content-Length") or 0)
                 done = 0
-                with open(part, "wb") as f:
+                # part/dest 均由「已通过白名单校验的 asset_name + resolve 后的
+                # dest_dir」构成（见上方清洗段），用 Path 接口流式写入
+                with part.open("wb") as f:
                     while True:
                         if cancel_check and cancel_check():
                             part.unlink(missing_ok=True)
