@@ -8,6 +8,12 @@
 
 A command-line + web-UI tool for downloading textbook PDFs from China's National Smart Education Platform for Primary and Secondary Schools (https://basic.smartedu.cn).
 
+> **📌 Project status: feature-frozen, maintenance mode.** Since v1.5.0 no new
+> features will be added; only fixes for platform-caused breakage. If the
+> platform's catalog API, PDF endpoints, or auth flow change, the tool reports
+> a clear error instead of failing silently — please report such cases to
+> [Issues](https://github.com/tau625/ShudaoLe/issues).
+
 ## Demo
 
 https://github.com/user-attachments/assets/2e59032c-0cc7-4e00-802e-52b620c795b5
