@@ -635,14 +635,17 @@ def expand_publisher_filter(pub):
 
 
 def publisher_facets(raw_facets):
-    """把真实 publisher 标签整理为「分组 + 成员」两级候选。
+    """把真实 publisher 标签整理为平铺的候选列表，全局按命中数降序。
 
-    为什么要两级：平台的版本标签是分裂的——语文标"统编版"、数学标"人教版"、
+    为什么要分组：平台的版本标签是分裂的——语文标"统编版"、数学标"人教版"、
     科学标"人教鄂教版"，可用户心智里它们都是"人教的"。只给合并后的分组，
     想精确下"统编版语文"的人找不到入口；只给真实标签，想下全套人教的人
-    得选三次。两级并存才能同时容纳"整套选"与"精确选"两种心智。
+    得选三次。所以多成员组输出一个「组头（整套）」选项（value=组名，选它=
+    组内任一标签命中）+ 各真实标签选项，全部平铺混排。
 
-    返回 [{value, count, group, is_group}]；group 为 None 表示顶层选项。
+    返回 [{value, count, group, is_group}]；group 为 None 表示独立标签。
+    组头 count = 组内成员之和（与"整套"的命中语义一致），排序键统一为
+    (-count, value)——用户按「使用人数」从上往下找，最常用的排最上。
     组内只有一个标签时不做分组，避免出现"分组 + 唯一成员"的冗余两层。"""
     counts = {}
     for f in raw_facets:
@@ -668,12 +671,15 @@ def publisher_facets(raw_facets):
             out.append({"value": members[0], "count": total,
                         "group": None, "is_group": False})
 
-    # 未分组的真实标签：按结果数降序补到顶层（SHOW_ALL_PUBLISHERS 开启时）
+    # 未分组的真实标签：一并混入（SHOW_ALL_PUBLISHERS 开启时）
     if SHOW_ALL_PUBLISHERS:
         rest = sorted((t for t in counts if t not in grouped),
                       key=lambda t: (-counts[t], t))
         out.extend({"value": t, "count": counts[t],
                     "group": None, "is_group": False} for t in rest)
+
+    # 全局按命中数降序（组头=成员之和）：最常用的排最上，同数按名称稳定序
+    out.sort(key=lambda f: (-f["count"], f["value"]))
     return out
 
 

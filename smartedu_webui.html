@@ -875,30 +875,31 @@
     restoreSelection(el, keep, options.some(o => o.value === keep), LABELS[dim] || dim);
   }
 
-  // 版本是两级候选：分组（整套选）+ 组内真实标签（精确选）。平台把人教系的语文/
-  // 数学/科学标成了三个不同标签，只给分组则精确选不到"统编版"，只给标签则下全套
-  // 得选三次，两级并存才能同时容纳两种心智。
+  // 版本候选平铺渲染、全局按命中数降序（后端已排好）。多成员组输出「组名（整套）」
+  // 选项（选它=组内任一标签命中，一次下全套人教），与真实标签混排——用户按
+  // 「使用人数」从上往下找，最常用的排最上。
   function fillPublisherFacet(options) {
     const el = $('#f-publisher');
     if (!el) return;
-    const keep = el.value;
-    const groups = [];
-    options.forEach(o => {
-      if (!o.group) return;
-      let g = groups.find(x => x.name === o.group);
-      if (!g) { g = { name: o.group, items: [] }; groups.push(g); }
-      g.items.push(o);
-    });
-    const optHtml = o =>
-      `<option value="${escapeHtml(o.value)}">${o.is_group ? '' : '　'}`
-      + `${escapeHtml(o.value)}${o.is_group ? '（整套）' : ''}（${o.count}）</option>`;
-    const top = options.filter(o => !o.group).map(optHtml).join('');
-    const grouped = groups.map(g =>
-      `<optgroup label="${escapeHtml(g.name)}">${g.items.map(optHtml).join('')}</optgroup>`
-    ).join('');
-    el.innerHTML = '<option value="">全部</option>' + top + grouped;
+    // 快捷组合的版本覆盖（pendingPub）：请求时下拉选项尚未渲染、存不住值，
+    // 首轮渲染后在这里落进选中值。pendingPub 由 resetFilterControls 负责清除。
+    const keep = el.value || pendingPub || '';
+    const html = options.map(o =>
+      `<option value="${escapeHtml(o.value)}"`
+      + `>${escapeHtml(o.value)}${o.is_group ? '（整套）' : ''}（${o.count}）</option>`);
+    el.innerHTML = '<option value="">全部</option>' + html.join('');
     restoreSelection(el, keep, options.some(o => o.value === keep),
                      LABELS.publisher || '版本');
+    // 组合激活期间（pendingPub 存在）：选中值已落进下拉，把其它维度的旧选中值
+    // 也彻底清掉——组合是"替换式"的，旧年级/科目/册次不应被 restoreSelection
+    // 恢复回来。同步隐藏年级下拉（syncGradeVisibility 会处理）。
+    if (pendingPub) {
+      DIMS.forEach(d => {
+        if (d === 'publisher') return;
+        const sel = $('#f-' + d);
+        if (sel) sel.value = '';
+      });
+    }
   }
 
   function currentFilters() {
@@ -910,6 +911,12 @@
     return f;
   }
 
+  // 快捷组合的一次性版本覆盖：组合的版本过滤在第一次请求就生效，不依赖下拉
+  // 选项先存在（选项要等本轮 facets 渲染才有）。每次请求都携带，直到首轮
+  // facets 渲染时由 fillPublisherFacet 把它同步进下拉选中值后才清空——
+  // 中途请求失败/被竞态丢弃时下次自动重试，不会丢用户的组合意图。
+  let pendingPub = null;
+
   function filterParams() {
     const params = new URLSearchParams();
     const f = currentFilters();
@@ -920,6 +927,7 @@
     params.set('system', SYS === '54' ? '五·四学制' : '六·三学制');
     params.set('school', SPEC ? '特殊学校' : '常规学校');
     params.set('audience', AUD);
+    if (pendingPub) params.set('publisher', pendingPub);
     const kw = $('#f-kw').value.trim();
     if (kw) params.set('keyword', kw);
     return params;
@@ -1032,10 +1040,16 @@
     return n;
   }
 
-  // 清空全部筛选（chips「清空全部」与筛选行「重置」共用），用书视图一并回到默认
-  function clearAllFilters() {
+  // 清空筛选控件（五个下拉 + 关键词）。快捷组合芯片也复用它做"替换式"应用。
+  function resetFilterControls() {
     DIMS.forEach(d => { const el = $('#f-' + d); if (el) el.value = ''; });
     $('#f-kw').value = '';
+    pendingPub = null;   // 放弃未生效的组合版本覆盖
+  }
+
+  // 清空全部筛选（chips「清空全部」与筛选行「重置」共用），用书视图一并回到默认
+  function clearAllFilters() {
+    resetFilterControls();
     AUD = '学生用书';
     viewsSave(); viewsSync();
     reload();
@@ -1178,6 +1192,7 @@
         if (changed) return reload();
       }
       renderFilters();
+      syncGradeVisibility();
       renderChips();
       renderRows();
       applyViewConstraints();
@@ -1208,6 +1223,27 @@
       btn.removeAttribute('aria-disabled');
       delete btn.dataset.blockMsg;
       btn.title = btn.dataset.tip;
+    }
+  }
+
+  // 高中教材按"必修/选择性必修"组织而非"年级"，516 条中 497 条 grade 为空，
+  // 选了具体年级后主科全被级联淘汰（dim_match 空值不命中）。年级候选覆盖率
+  // 过低时隐藏下拉防误导：threshold 0.5（高中 19/516≈4% 远低于，小学/初中≈100%）。
+  const GRADE_COVERAGE_THRESHOLD = 0.5;
+  function syncGradeVisibility() {
+    const gradeLabel = document.querySelector('label[data-dim="grade"]');
+    if (!gradeLabel) return;
+    const covered = (FACETS.grade || []).reduce((s, f) => s + f.count, 0);
+    // 覆盖率不足（高中≈4%）或组合激活期间（pendingPub）都隐藏年级：
+    // 后者是组合替换式应用的竞态保护——pendingPub 存在期间请求可能被旧
+    // grade/subject 污染，隐藏年级下拉并清空选中值防止混入。
+    const shouldHide = pendingPub || (TOTAL > 0 && covered < TOTAL * GRADE_COVERAGE_THRESHOLD);
+    if (shouldHide) {
+      gradeLabel.style.display = 'none';
+      const el = $('#f-grade');
+      if (el && el.value) el.value = '';
+    } else {
+      gradeLabel.style.display = '';
     }
   }
 
@@ -2081,28 +2117,27 @@
       b.style.cssText = 'padding:2px 10px;font-size:12px;border:1px solid #d8cdb8;border-radius:14px;' +
         'background:#faf6ee;color:#6b5d45;cursor:pointer';
       b.onclick = function () {
+        // 替换式应用：清空全部筛选控件再设组合的学段，版本经 pendingPub
+        // 一次性覆盖参数在首次请求即生效——旧年级/科目/关键词不再残留，
+        // 也不依赖"选项先渲染出来"（旧二段 setTimeout 有竞态且会被旧条件打空）。
+        // 视图开关（学制/特教/用书）保持不动。
+        if (typeof resetFilterControls === 'function') resetFilterControls();
         var ph = document.getElementById('f-phase');
-        var pub = document.getElementById('f-publisher');
         if (ph) ph.value = c.phase;
+        var pub = document.getElementById('f-publisher');
         if (pub) pub.value = '';
-        // 版本下拉的值在 reload 前不可靠（选项尚未生成），先按学段刷新，
-        // 再由 facets 渲染完成后由 chips 确认；这里直接触发主脚本 reload()
-        var ev = document.createEvent ? null : null;
+        pendingPub = c.publisher;
         if (typeof reload === 'function') {
           reload();
         } else {
-          // 主脚本 reload 是闭包内函数不可达时，模拟 change 事件触发级联
+          // 主脚本 reload 不可达时，模拟 change 事件触发级联
           [ph, pub].forEach(function (el) {
             if (!el) return;
             el.dispatchEvent(new Event('change', { bubbles: true }));
           });
         }
-        // 二段：等 facets 刷新出选项后再设版本并再刷一次
-        setTimeout(function () {
-          if (pub) { pub.value = c.publisher; pub.dispatchEvent(new Event('change', { bubbles: true })); }
-          var cat = document.getElementById('cat-body');
-          if (cat) cat.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-        }, 600);
+        var cat = document.getElementById('cat-body');
+        if (cat) cat.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       };
       wrap.appendChild(b);
     });

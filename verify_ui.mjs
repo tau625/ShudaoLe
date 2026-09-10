@@ -127,6 +127,73 @@ expect((await total()).includes('498'), '63+常规+教师命中 498', await tota
 expect(await page.isVisible('#btn-export-csv'), '结果非空时导出 CSV 可见');
 await page.screenshot({ path: OUT + '/view-tea.png' });
 
+// 9) 高中视图：年级覆盖率过低时年级下拉隐藏
+await page.evaluate(() => localStorage.removeItem('shudaole.views'));
+await page.reload({ waitUntil: 'networkidle' });
+await page.waitForFunction(() => document.querySelector('#cat-count')?.textContent.includes('命中'), null, { timeout: 60000 });
+// 默认小学视图：年级下拉应可见
+expect(await page.isVisible('label[data-dim="grade"]'), '小学视图年级下拉可见');
+await page.selectOption('#f-phase', '高中');
+await page.waitForTimeout(2000);
+expect(await page.isHidden('label[data-dim="grade"]'), '高中视图年级下拉隐藏（覆盖率不足 50%）');
+expect(await page.isVisible('label[data-dim="subject"]'), '高中视图科目下拉仍可见');
+// 切回小学，年级下拉恢复
+await page.selectOption('#f-phase', '');
+await page.waitForTimeout(2000);
+expect(await page.isVisible('label[data-dim="grade"]'), '切回全部后年级下拉恢复');
+await page.screenshot({ path: OUT + '/view-senior-hidden-grade.png' });
+
+// 10) 版本下拉按命中数降序（前 3 项计数不递增）
+const pubOpts = await page.$$eval('#f-publisher option:not([value=""])', os =>
+  os.map(o => {
+    const m = o.textContent.match(/（(\d+)）$/);
+    return { v: o.value, c: m ? +m[1] : 0 };
+  }));
+const first3 = pubOpts.slice(0, 3);
+if (first3.length >= 3) {
+  expect(first3[0].c >= first3[1].c && first3[1].c >= first3[2].c,
+    '版本下拉前 3 项按计数降序',
+    first3.map(o => o.v + '(' + o.c + ')').join(' > '));
+}
+
+// 11) 常用组合：替换式应用（先选年级，再点芯片后全部被替换）
+// page.fill 不触发 app 的 oninput handler，用 page.evaluate 确保状态一致
+await page.evaluate(() => localStorage.removeItem('shudaole.views'));
+await page.reload({ waitUntil: 'networkidle' });
+await page.waitForFunction(() => document.querySelector('#cat-count')?.textContent.includes('命中'), null, { timeout: 60000 });
+await page.selectOption('#f-grade', '一年级');
+// selectOption 触发 onchange → reload，等计数从默认值变化
+const prevTotal = await total();
+await page.waitForFunction(
+  (prev) => (document.querySelector('#cat-count')?.textContent || '').trim() !== prev,
+  prevTotal, { timeout: 10000 });
+await page.waitForTimeout(300);
+// 用 evaluate 读取，避免 JSHandle 解析的编码问题
+const oldTotal = await page.evaluate(() => (document.querySelector('#cat-count')?.textContent || '').trim());
+const hasHit = oldTotal.indexOf('命中') >= 0;
+const notZero = oldTotal.indexOf('命中 0 条') < 0;
+expect(hasHit && notZero, '预选条件有命中', oldTotal);
+const comboBtn = await page.$('button.js-combo');
+if (comboBtn) {
+  const comboText = await comboBtn.textContent();
+  console.log('   combo:', comboText);
+  await comboBtn.click();
+  // 等 reload 完成 + 竞态响应全部到达
+  await page.waitForFunction(() => document.querySelector('#cat-count')?.textContent.includes('命中'), null, { timeout: 10000 });
+  await page.waitForTimeout(1500);
+  s = await states();
+  expect(s.stu === 'true', '组合不重置用书视图', JSON.stringify(s));
+  const newTotal = await total();
+  expect(newTotal.includes('命中') && !newTotal.includes('0 条'), '组合替换后有命中', newTotal);
+  const gradeVal = await page.$eval('#f-grade', el => el.value);
+  expect(gradeVal === '', '组合清空了年级', JSON.stringify(gradeVal));
+  const pubVal = await page.$eval('#f-publisher', el => el.value);
+  expect(pubVal !== '', '组合设置了版本', JSON.stringify(pubVal));
+  const chipsText = await page.textContent('#filter-chips').catch(() => '');
+  expect(chipsText.includes('版本'), 'chips 显示版本条件', chipsText);
+  await page.screenshot({ path: OUT + '/view-combo-after.png' });
+}
+
 // 收尾：清存档回默认
 await page.evaluate(() => { localStorage.removeItem('shudaole.views'); localStorage.removeItem('shudaole.added'); });
 await browser.close();

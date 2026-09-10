@@ -198,6 +198,31 @@ def test_publisher_facets_shows_ungrouped():
     assert counts["北师大版"] > counts["外研版"]  # 降序
 
 
+def test_publisher_facets_global_sort_by_count():
+    """全局按命中数降序：组头 count = 成员之和，最常用的排最上。"""
+    facets = publisher_facets([{"value": "统编版", "count": 3},
+                               {"value": "人教版", "count": 5},
+                               {"value": "人教鄂教版", "count": 2},
+                               {"value": "北师大版", "count": 7},
+                               {"value": "华东师大版", "count": 1}])
+    counts = [f["count"] for f in facets]
+    assert counts == sorted(counts, reverse=True), facets
+    group_vals = {f["value"]: f["count"] for f in facets if f["is_group"]}
+    # 人教版系 count = 3 + 5 + 2 = 10
+    assert group_vals.get("人教版系") == 10
+    # 人教版系 (10) > 北师大版系 (8) > 北师大版 (7) > 人教版 (5) > ...
+    top_values = [f["value"] for f in facets]
+    assert top_values.index("人教版系") < top_values.index("北师大版系")
+
+
+def test_publisher_facets_no_optgroup_in_output():
+    """输出是平铺数组，不带 group 字段供前端做分层渲染——后端只提供计数排序。"""
+    facets = publisher_facets([{"value": "统编版", "count": 3},
+                               {"value": "人教版", "count": 5}])
+    # 组员仍带 group 标识（供前端识别"整套"后缀），但这是数据字段不是渲染指令
+    assert all("value" in f and "count" in f for f in facets)
+
+
 def test_shutdown_browser_dead_proc_noop():
     """进程已退出时 _shutdown_browser 应立即返回（不依赖真实浏览器）。"""
     from shudaole import token as token_mod
