@@ -7,28 +7,73 @@
 <style>
   :root {
     --bg: #f5f2ea; --card: #fffefb; --line: #e7e1d3; --line-soft: #efe9db;
-    --text: #2c2820; --muted: #8d8370;
+    --text: #2c2820; --muted: #756b58;
     --primary: #b23a2e; --primary-hover: #992e23; --primary-disabled: #d9a8a1;
     --accent: #2f5d8a;
     --focus-ring: #efc9c2;
     --success-bg: #e2f2e7; --success-fg: #1c7a44;
     --danger-bg: #fdeae8; --danger-fg: #b3261e; --danger-border: #f2c4bd;
-    --warning-bg: #fbf0d3; --warning-fg: #9a6b00;
+    --warning-bg: #fbf0d3; --warning-fg: #856000; --warning-border: #ecdcb0;
     --info-bg: #e9f0f8; --info-fg: #2f5d8a;
     --note-bg: #fdf6e4; --note-fg: #8a5a00; --note-border: #ecdcb0; --note-strong: #a86a00;
     --surface-2: #faf7ef; --input-bg: #fdfcf7; --code-bg: #f0ebdd;
-    --pending-bg: #f2eee2; --pending-fg: #8d8370;
+    --pending-bg: #f2eee2; --pending-fg: var(--muted);
     --working-bg: #e9f0f8; --working-fg: #2f5d8a;
     --seal: #b23a2e;
+    /* 主题衍生色：暗夜模式在 html[data-theme="dark"] 里整体覆盖 */
+    --scrollbar-thumb: #d8cfba;
+    --selection: #f0d6cf;
+    --placeholder: #b8af9c;
+    --row-hover: #faf6ec;
+    --added-row: #f3f8f2;
+    --accent-border: #c9d7e6;
+    --hover-overlay: rgba(0,0,0,.08);
+    --bar-track: #efe9db;
+    --bar-indet-a: #d98880; --bar-indet-b: #b23a2e;
+    --option-disabled: #b9b9b9;
+    --danger-disabled-fg: #d1d5db;
+    --shadow-rgb: 60,50,30;
+    --on-primary: #fff;
+    color-scheme: light;
+  }
+  /* ---- 暗夜模式：暖黑底 + 印章红主色，与纸感品牌一脉相承 ---- */
+  html[data-theme="dark"] {
+    --bg: #201c17; --card: #2a251f; --line: #3e372e; --line-soft: #352f27;
+    --text: #e8e2d5; --muted: #a89c86;
+    --primary: #c94b3e; --primary-hover: #d95f52; --primary-disabled: #7a4a44;
+    --accent: #8fb4d9;
+    --focus-ring: #7a4038;
+    --success-bg: #24382c; --success-fg: #7cc9a0;
+    --danger-bg: #452723; --danger-fg: #f1998f; --danger-border: #6b3a33;
+    --warning-bg: #3b3118; --warning-fg: #d9b45c; --warning-border: #5a4a22;
+    --info-bg: #253447; --info-fg: #8fb4d9;
+    --note-bg: #38311c; --note-fg: #cfa966; --note-border: #54471f; --note-strong: #dcb56a;
+    --surface-2: #25211b; --input-bg: #262119; --code-bg: #322c22;
+    --pending-bg: #2f2b23; --pending-fg: var(--muted);
+    --working-bg: #253447; --working-fg: #8fb4d9;
+    --scrollbar-thumb: #4a4237;
+    --selection: #5a3a34;
+    --placeholder: #6b6355;
+    --row-hover: #322c24;
+    --added-row: #263329;
+    --accent-border: #3d4f63;
+    --hover-overlay: rgba(255,255,255,.08);
+    --bar-track: #3a342b;
+    --bar-indet-a: #7a4038; --bar-indet-b: #c94b3e;
+    --option-disabled: #5f594e;
+    --danger-disabled-fg: #6b7280;
+    --shadow-rgb: 0,0,0;
+    color-scheme: dark;
   }
   * { box-sizing: border-box; }
+  html { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) transparent; }
   body {
     background: var(--bg); color: var(--text); margin: 0;
     font: 14px/1.6 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
   }
-  ::selection { background: #f0d6cf; }
+  ::selection { background: var(--selection); }
   ::-webkit-scrollbar { width: 10px; height: 10px; }
-  ::-webkit-scrollbar-thumb { background: #d8cfba; border-radius: 99px; border: 2px solid var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 99px; border: 2px solid var(--bg); }
   ::-webkit-scrollbar-track { background: transparent; }
   .wrap { max-width: 1080px; margin: 0 auto; padding: 26px 16px 56px; }
 
@@ -47,7 +92,7 @@
   }
   .top h1 {
     font-size: 26px; margin: 0; letter-spacing: 3px;
-    font-family: "Noto Serif SC", "Songti SC", "STSong", Georgia, serif;
+    font-family: "Noto Serif SC", "Songti SC", "STSong", "Source Han Serif SC", "Noto Serif CJK SC", "Microsoft YaHei", system-ui, sans-serif;
   }
   .top .sub { color: var(--muted); margin: 3px 0 0; font-size: 13px; }
   .top-meta { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--muted); }
@@ -59,9 +104,9 @@
   .top-meta a:hover { text-decoration: underline; }
 
   .card {
-    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    background: var(--card); border: 1px solid var(--line); border-radius: 10px;
     padding: 18px 20px; margin-bottom: 18px;
-    box-shadow: 0 1px 3px rgba(60,50,30,.05), 0 6px 16px rgba(60,50,30,.04);
+    box-shadow: 0 1px 3px rgba(var(--shadow-rgb),.05), 0 6px 16px rgba(var(--shadow-rgb),.04);
   }
   .card h2 {
     font-size: 16px; margin: 0 0 14px;
@@ -80,16 +125,16 @@
     width: 100%; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
     font: 13px/1.55 Consolas, "Microsoft YaHei", monospace; resize: vertical; background: var(--input-bg);
   }
-  textarea::placeholder, input::placeholder { color: #b8af9c; }
+  textarea::placeholder, input::placeholder { color: var(--placeholder); }
   textarea:focus, input:focus, select:focus {
-    outline: 2px solid var(--focus-ring); border-color: var(--primary);
+    outline: 2px solid var(--primary); border-color: var(--primary);
   }
   input[type=text], input[type=password], input[type=number] {
     border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--input-bg);
   }
   input[type=checkbox] { accent-color: var(--primary); }
   button:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible {
-    outline: 2px solid var(--focus-ring); outline-offset: 1px; border-color: var(--primary);
+    outline: 2px solid var(--primary); outline-offset: 1px; border-color: var(--primary);
   }
   .row { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 12px; align-items: flex-end; }
   .row label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
@@ -101,19 +146,20 @@
   details.help summary { cursor: pointer; user-select: none; }
   details.help summary:hover { color: var(--text); }
   details.help ol { margin: 8px 0 2px 20px; padding: 0; }
-  code { background: var(--code-bg); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+  details.help b { color: var(--text); }
+  code { background: var(--code-bg); padding: 1px 5px; border-radius: 6px; font-size: 12px; }
 
-  .btns { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 16px; }
-  button { border: none; border-radius: 9px; padding: 9px 24px; font-size: 14px; cursor: pointer; }
+  .btns { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 12px; }
+  button { border: none; border-radius: 8px; padding: 9px 24px; font-size: 14px; cursor: pointer; }
   button.primary {
     background: var(--primary); color: #fff; font-weight: 600;
     box-shadow: 0 2px 8px rgba(178,58,46,.28);
   }
   button.primary:hover:not(:disabled) { background: var(--primary-hover); }
   button.primary:disabled { background: var(--primary-disabled); box-shadow: none; cursor: not-allowed; }
-  button.danger { background: #fff; color: var(--danger-fg); border: 1px solid var(--danger-border); }
+  button.danger { background: var(--card); color: var(--danger-fg); border: 1px solid var(--danger-border); }
   button.danger:not(:disabled):hover { background: var(--danger-bg); }
-  button.danger:disabled { color: #d1d5db; border-color: var(--line); cursor: not-allowed; }
+  button.danger:disabled { color: var(--danger-disabled-fg); border-color: var(--line); cursor: not-allowed; }
   .summary { color: var(--muted); font-size: 13px; margin-left: 6px; }
   .summary b { font-weight: 700; }
   .sum-ok { color: var(--success-fg); }
@@ -139,10 +185,13 @@
   .link-meta #link-count { color: var(--primary); font-weight: 600; }
 
   .table-wrap { overflow-x: auto; }
+  /* H4：任务表限高滚动 + 表头吸顶（移动端媒体查询里放开限高） */
+  .tasks-wrap { max-height: 420px; overflow-y: auto; }
+  .tasks-wrap thead th { position: sticky; top: 0; z-index: 1; }
   table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 13px; }
   th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
   thead th { background: var(--surface-2); color: var(--muted); font-weight: 600; font-size: 12px; }
-  tbody tr:hover { background: #faf6ec; }
+  tbody tr:hover { background: var(--row-hover); }
   .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .msg { color: var(--muted); font-size: 12px; word-break: break-all; }
   .empty { text-align: center; color: var(--muted); padding: 20px 0 !important; }
@@ -154,11 +203,11 @@
   .badge.pending { background: var(--pending-bg); color: var(--pending-fg); }
   .badge.parsing, .badge.downloading { background: var(--working-bg); color: var(--working-fg); }
 
-  .bar { height: 8px; background: #efe9db; border-radius: 99px; overflow: hidden; margin-top: 5px; }
+  .bar { height: 8px; background: var(--bar-track); border-radius: 99px; overflow: hidden; margin-top: 5px; }
   .bar > div { height: 100%; width: 0; background: var(--primary); border-radius: 99px; transition: width .25s; }
   .bar.indet > div {
     width: 40%;
-    background: linear-gradient(90deg, #d98880, #b23a2e, #d98880);
+    background: linear-gradient(90deg, var(--bar-indet-a), var(--bar-indet-b), var(--bar-indet-a));
     animation: slide 1.2s linear infinite;
   }
   @keyframes slide { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
@@ -175,7 +224,7 @@
     border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px;
     background: var(--input-bg); font-size: 13px; min-width: 110px;
   }
-  button.ghost { background: #fff; color: var(--accent); border: 1px solid #c9d7e6; }
+  button.ghost { background: var(--card); color: var(--accent); border: 1px solid var(--accent-border); }
   button.ghost:hover:not(:disabled) { background: var(--info-bg); }
   button.small-btn { padding: 5px 14px; font-size: 13px; }
   .dir-input { display: flex; gap: 6px; align-items: stretch; }
@@ -187,19 +236,15 @@
   .open-acts { margin-top: 5px; }
   .cat-status { font-size: 12px; color: var(--muted); font-weight: 400; margin-left: 8px; min-width: 0; flex: 0 1 auto; }
   .cat-status.cat-err { color: var(--danger-fg); font-weight: 600; }
-  .scope-note {
-    font-size: 12px; color: var(--note-fg); background: var(--note-bg);
-    border: 1px solid var(--note-border); border-radius: 8px; padding: 6px 10px; margin: 8px 0 2px;
-  }
-  .scope-note b { color: var(--note-strong); }
-  select option:disabled { color: #b9b9b9; }
+  select option:disabled { color: var(--option-disabled); }
   .cat-result-bar {
     display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px;
-    margin: 12px 0 8px; font-size: 13px; color: var(--muted);
+    margin: 12px 0 0; font-size: 13px; color: var(--muted);
   }
   .cat-table-wrap { max-height: 340px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; }
   .cat-table-wrap table { margin: 0; }
   .cat-table-wrap thead th {
+    position: sticky; top: 0; z-index: 1;   /* H4：目录表表头吸顶 */
     background: var(--surface-2);
     border-bottom: 1px solid var(--line);
   }
@@ -217,11 +262,17 @@
   #links.flash { border-color: var(--primary); box-shadow: 0 0 0 3px var(--focus-ring); }
   .kw-input { width: 170px; }
   .btn-add[disabled] { color: var(--success-fg); border-color: var(--success-bg); background: var(--success-bg); cursor: default; }
+  /* M12：已加入清单的行淡绿底，一眼区分「加过了」 */
+  tr.is-added td { background: var(--added-row); }
+  /* L11：空态行不响应 hover 变色 */
+  tr.empty-row:hover { background: none; }
+  /* L12：清单输入框高亮闪动后平滑淡出 */
+  #links { transition: box-shadow .4s, border-color .4s; }
 
   /* ---- 已选条件（筛选 chips）---- */
   .chips {
     display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
-    margin: 10px 0 2px; padding: 8px 10px;
+    margin: 12px 0 0; padding: 8px 10px;
     background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px;
   }
   .chips[hidden] { display: none; }
@@ -229,13 +280,13 @@
   .chip {
     display: inline-flex; align-items: center; gap: 4px;
     padding: 3px 6px 3px 10px; border-radius: 99px; font-size: 12px;
-    background: var(--info-bg); color: var(--info-fg); border: 1px solid #c9d7e6;
+    background: var(--info-bg); color: var(--info-fg); border: 1px solid var(--accent-border);
   }
   .chip button {
     border: none; background: transparent; color: inherit; cursor: pointer;
-    font-size: 14px; line-height: 1; padding: 0 2px; border-radius: 99px;
+    font-size: 14px; line-height: 1; padding: 2px 6px; border-radius: 99px;
   }
-  .chip button:hover { background: rgba(0,0,0,.08); }
+  .chip button:hover { background: var(--hover-overlay); }
   .chip-clear {
     margin-left: auto; border: none; background: transparent; cursor: pointer;
     font-size: 12px; color: var(--muted); text-decoration: underline; padding: 2px 4px;
@@ -244,31 +295,34 @@
 
   /* ---- 空结果放宽建议 ---- */
   .hint-row { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin-top: 8px; }
-  .hint-row .ghost { background: #fff; }
+  .hint-row .ghost { background: var(--card); }
 
   /* ---- 提示条（toast）---- */
   #toast {
-    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    position: fixed; bottom: calc(16px + env(safe-area-inset-bottom)); left: 50%;
+    transform: translateX(-50%) translateY(10px);
     pointer-events: none;
     max-width: min(480px, calc(100vw - 32px)); padding: 10px 16px; border-radius: 10px;
-    font-size: 13px; box-shadow: 0 4px 16px rgba(60,50,30,.16); z-index: 999;
-    display: none; background: var(--danger-bg); color: var(--danger-fg); border: 1px solid var(--danger-border);
+    font-size: 13px; box-shadow: 0 4px 16px rgba(var(--shadow-rgb),.16); z-index: 10000;
+    opacity: 0; visibility: hidden;
+    transition: opacity .22s ease-out, transform .22s ease-out, visibility .22s;
+    background: var(--danger-bg); color: var(--danger-fg); border: 1px solid var(--danger-border);
   }
-  #toast.info { background: var(--info-bg); color: var(--info-fg); border-color: #c9d7e6; }
-  #toast.show { display: block; }
+  #toast.info { background: var(--info-bg); color: var(--info-fg); border-color: var(--accent-border); }
+  #toast.show { opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0); }
 
   /* ---- 视图开关（五四学制 / 特殊教育）---- */
   .view-switch-bar {
     display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-    margin: 10px 0 4px; padding: 8px 12px;
-    background: var(--bg); border: 1px solid var(--line-soft); border-radius: 10px;
+    margin: 12px 0 0; padding: 8px 12px;
+    background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px;
   }
   .view-switch-label { font-size: 13px; font-weight: 600; color: var(--text); }
   .view-switch-hint { font-size: 12px; color: var(--muted); }
   .sys-switch-group { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
   .sys-switch {
     display: inline-flex; align-items: center; gap: 7px;
-    padding: 8px 14px; font-size: 13px; border-radius: 9px;
+    padding: 8px 14px; font-size: 13px; border-radius: 8px;
     background: var(--card); color: var(--muted);
     border: 1px solid var(--line); cursor: pointer; transition: all .15s;
   }
@@ -293,6 +347,53 @@
   /* 学制（63/54 单选组）与特殊教育（独立开关）之间的分隔线 */
   .view-switch-divider { width: 1px; height: 18px; background: var(--line); flex: 0 0 auto; }
 
+  /* ---- 弹窗（H3）：入场动画 + dialog 语义配套 ---- */
+  @keyframes modalIn { from { opacity: 0; transform: translateY(10px) } }
+  .modal-box { animation: modalIn .18s ease-out }
+  @keyframes overlayIn { from { opacity: 0 } }
+  .modal-overlay { animation: overlayIn .15s ease-out }
+
+  /* M3：信息型卡片的步骤徽章去强调 */
+  .step.passive { background: var(--muted); box-shadow: none }
+
+  /* M7：计数变化的轻量强调动画 */
+  @keyframes pop { 0% { transform: scale(1.25); color: var(--primary) } }
+  .count-pop { display: inline-block; animation: pop .3s ease-out }
+
+  /* M2：快捷组合芯片（与 chips 同一套设计 token；M13：间距 12/0） */
+  #quick-combos { margin: 12px 0 0; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .combos-label { font-size: 12px; color: var(--muted); }
+  .js-combo {
+    padding: 2px 12px; font-size: 12px; border: 1px solid var(--line); border-radius: 99px;
+    background: var(--surface-2); color: var(--text); cursor: pointer;
+  }
+  .js-combo:hover { border-color: var(--primary); color: var(--primary); }
+
+  /* L9：令牌输入行（输入框 + 明文切换按钮） */
+  .token-input-row { display: flex; gap: 6px; align-items: center; margin-top: 2px; }
+  .token-input-row input { flex: 1; min-width: 0; width: auto; margin-top: 0; }
+
+  /* L2：页脚 */
+  .foot { margin-top: 10px; text-align: center; font-size: 12px; color: var(--muted); }
+  .foot a { color: var(--accent); text-decoration: none; }
+  .foot a:hover { text-decoration: underline; }
+
+  /* L1：回到顶部小圆钮 */
+  .to-top {
+    position: fixed; right: 18px; bottom: calc(18px + env(safe-area-inset-bottom));
+    width: 38px; height: 38px; padding: 0; border-radius: 99px;
+    background: var(--surface-2); color: var(--muted); border: 1px solid var(--line);
+    font-size: 15px; cursor: pointer; display: none; align-items: center; justify-content: center;
+    box-shadow: 0 2px 8px rgba(var(--shadow-rgb),.12); z-index: 900;
+  }
+  .to-top.show { display: flex; }
+  .to-top:hover { color: var(--primary); border-color: var(--primary); }
+
+  /* L4：尊重系统"减少动态效果"偏好 */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+  }
+
   /* ---- 响应式 ---- */
   .row label { flex: 1 1 130px; min-width: 110px; }
   #token { max-width: 360px; }
@@ -305,8 +406,10 @@
     .kw-input { width: 100%; }
     #token { max-width: 100%; }
     #output { width: 100%; }
-    /* 取消目录表内层纵向滚动，改随整页滚动，避免移动端嵌套滚动手感差 */
-    .cat-table-wrap { max-height: none; }
+    /* 取消目录表/任务表内层纵向滚动，改随整页滚动，避免移动端嵌套滚动手感差 */
+    .cat-table-wrap, .tasks-wrap { max-height: none; }
+    /* L15：窄屏隐藏任务表「信息」列（路径信息已在 title 与日志中） */
+    .tasks-wrap th:nth-child(4), .tasks-wrap td:nth-child(4) { display: none; }
     /* 触控目标放大（原始尺寸低于 44px 推荐值） */
     .chip button { padding: 6px 10px; font-size: 16px; }
     button.act-btn { padding: 8px 12px; }
@@ -315,6 +418,19 @@
     .top h1 { font-size: 22px; }
   }
 </style>
+<script>
+/* 主题预备：在 body 渲染前把 data-theme 写到 <html> 上，避免暗色用户看到闪白。
+   优先取用户显式选择（localStorage shudaole.theme），否则跟随系统偏好。 */
+(function () {
+  try {
+    var t = localStorage.getItem('shudaole.theme');
+    if (t !== 'light' && t !== 'dark') {
+      t = window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    document.documentElement.dataset.theme = t;
+  } catch (e) { /* 存不了就用亮色 */ }
+})();
+</script>
 </head>
 <body>
 <div id="toast" role="alert"></div>
@@ -329,7 +445,8 @@
     </div>
     <div class="top-meta">
       <!-- 发版时与 version_info.txt 的 FileVersion 同步修改（此处仅为加载前的兜底显示） -->
-      <span class="ver" id="app-ver">v1.4.2</span>
+      <span class="ver" id="app-ver">v1.5.0</span>
+      <button type="button" id="btn-theme" class="ghost small-btn" aria-label="切换深浅色主题" title="切换深浅色主题">🌙</button>
       <a href="https://github.com/tau625/ShudaoLe" target="_blank" rel="noopener">GitHub 项目页</a>
     </div>
   </header>
@@ -339,14 +456,15 @@
       <span id="cat-status" class="cat-status">加载中...</span>
       <button id="btn-reload-catalog" class="ghost small-btn h2-right">刷新目录</button>
     </h2>
-    <div class="scope-note">
-      学段已开放<b>小学 / 初中 / 高中 / 特殊教育</b>全部范围；版本常用分组为<b>人教系列</b>
+    <details class="help scope-help">
+      <summary>学段范围与版本分组说明</summary>
+      <p>学段已开放<b>小学 / 初中 / 高中 / 特殊教育</b>全部范围；版本常用分组为<b>人教系列</b>
       （人教版 / 统编版 / 人教鄂教版）与 <b>沪教版</b>，点「人教版系（整套）」可一次涵盖人教全部主科，
-      其余版本标签也已在下拉中按结果数列出可选。
-    </div>
+      其余版本标签也已在下拉中按结果数列出可选。</p>
+    </details>
     <div class="view-switch-bar">
       <span class="view-switch-label">教材视图</span>
-      <span class="sys-switch-group" role="radiogroup" aria-label="学制切换">
+      <span class="sys-switch-group" role="group" aria-label="学制切换">
         <button type="button" id="switch-63" class="sys-switch" aria-pressed="true" title="常规教材：小学6年+初中3年（全国大多数地区）">六三学制</button>
         <button type="button" id="switch-54" class="sys-switch" aria-pressed="false" title="五四学制教材：小学5年+初中4年">五四学制</button>
       </span>
@@ -355,25 +473,25 @@
         <button type="button" id="switch-spec" class="sys-switch" aria-pressed="false" title="只显示特殊教育学校（盲校/聋校/培智）教材">特殊教育</button>
       </span>
       <span class="view-switch-divider" aria-hidden="true"></span>
-      <span class="sys-switch-group" role="radiogroup" aria-label="用书类型切换">
+      <span class="sys-switch-group" role="group" aria-label="用书类型切换">
         <button type="button" id="switch-stu" class="sys-switch" aria-pressed="true" title="默认视图：学生教材与读本（二态合计覆盖全部教材，无遗漏）">学生用书</button>
         <button type="button" id="switch-tea" class="sys-switch" aria-pressed="false" title="教师教学用书 / 教参（教师视图）">教师用书</button>
       </span>
       <span class="view-switch-hint">切换后，下方学段/年级等选项会随之联动</span>
     </div>
-    <div class="row" style="margin-top:2px">
+    <div class="row">
       <label data-dim="phase">学段 <select id="f-phase"></select></label>
       <label data-dim="grade">年级 <select id="f-grade"></select></label>
       <label data-dim="subject">科目 <select id="f-subject"></select></label>
       <label data-dim="publisher">版本 <select id="f-publisher"></select></label>
       <label data-dim="volume">册次 <select id="f-volume"></select></label>
       <label>关键词 <input id="f-kw" class="kw-input" type="text" placeholder="书名 / 科目 / 版本，支持 册次:上册"></label>
-      <button id="btn-reset-filters" type="button" class="ghost small-btn" hidden
+      <button id="btn-reset-filters" type="button" class="ghost small-btn" style="visibility:hidden"
               title="清空全部筛选条件，用书视图回到默认">重置</button>
     </div>
     <div id="filter-chips" class="chips" hidden></div>
     <div class="cat-result-bar">
-      <span id="cat-count">命中 0 条</span>
+      <span id="cat-count" aria-live="polite">…</span>
       <button id="btn-cart" class="ghost small-btn" hidden title="查看下方下载清单">清单 <b id="cart-n">0</b> 条</button>
       <button id="btn-add-all" class="primary small-btn" disabled>全部加入下载列表</button>
       <button id="btn-export-csv" class="ghost small-btn" hidden title="导出当前列表为 CSV 文件">导出 CSV</button>
@@ -383,16 +501,16 @@
       <table>
         <thead>
           <tr>
-            <th style="width:46%">教材名称</th>
-            <th style="width:9%">年级</th>
-            <th style="width:13%">科目</th>
-            <th style="width:9%">册次</th>
-            <th style="width:13%">版本 / 变体</th>
-            <th style="width:10%"></th>
+            <th scope="col" style="width:46%">教材名称</th>
+            <th scope="col" style="width:9%">年级</th>
+            <th scope="col" style="width:13%">科目</th>
+            <th scope="col" style="width:9%">册次</th>
+            <th scope="col" style="width:13%">版本 / 变体</th>
+            <th scope="col" style="width:10%"></th>
           </tr>
         </thead>
         <tbody id="cat-body">
-          <tr><td colspan="6" class="empty">目录加载中...</td></tr>
+          <tr class="empty-row"><td colspan="6" class="empty">加载中…</td></tr>
         </tbody>
       </table>
     </div>
@@ -404,7 +522,10 @@
     </h2>
     <div class="token-row">
       <label class="token-field">登录令牌
-        <input id="token" type="password" placeholder="一键获取，或手动粘贴 x-nd-auth">
+        <span class="token-input-row">
+          <input id="token" type="password" autocomplete="off" placeholder="一键获取，或手动粘贴 x-nd-auth">
+          <button id="btn-token-toggle" type="button" class="ghost small-btn" title="切换令牌明文显示">显示</button>
+        </span>
       </label>
       <button id="btn-auto-token" class="primary small-btn">一键登录获取令牌</button>
       <button id="btn-abort-token" class="ghost small-btn" hidden>放弃</button>
@@ -431,7 +552,7 @@
     <div id="cart-summary" class="cart-summary" hidden></div>
     <textarea id="links" rows="7" placeholder="每行一个教材详情页链接或 contentId，支持 # 注释。例如:&#10;https://basic.smartedu.cn/tchMaterial/detail?contentType=assets_document&amp;contentId=xxxxxxxx&amp;catalogType=tchMaterial&amp;subCatalog=tchMaterial"></textarea>
     <div class="link-meta">
-      <span id="link-count"></span>
+      <span id="link-count" aria-live="polite"></span>
       <span>支持 # 开头的注释行</span>
     </div>
     <div class="row">
@@ -441,7 +562,6 @@
           <button id="btn-browse" type="button" class="ghost small-btn"
                   title="用资源管理器选择保存目录">浏览…</button>
         </span>
-        <span id="out-hint" class="out-hint">默认保存在「下载」目录的「书到了」文件夹</span>
       </label>
       <label>重试次数
         <input id="retries" class="small" type="number" value="3" min="1" max="10">
@@ -453,6 +573,8 @@
         <input id="flat_name" type="checkbox"> 纯书名命名
       </label>
     </div>
+    <!-- H6：提示行移出 label，不再参与 flex-end 对齐（原先被抬高约 40px） -->
+    <div id="out-hint" class="out-hint">默认保存在「下载」目录的「书到了」文件夹</div>
     <div class="btns">
       <button id="btn-start" class="primary">开始下载</button>
       <button id="btn-stop" class="danger" disabled>停止</button>
@@ -461,27 +583,34 @@
   </section>
 
   <section class="card">
-    <h2><span class="step">4</span>任务列表</h2>
-    <div class="table-wrap">
+    <h2><span class="step passive">4</span>下载进度</h2>
+    <div class="table-wrap tasks-wrap">
       <table>
         <thead>
           <tr>
-            <th style="width:76px">状态</th>
-            <th style="width:30%">教材 / 输入</th>
-            <th style="width:30%">进度</th>
-            <th>信息</th>
+            <th scope="col" style="width:76px">状态</th>
+            <th scope="col" style="width:30%">教材 / 输入</th>
+            <th scope="col" style="width:30%">进度</th>
+            <th scope="col">信息</th>
           </tr>
         </thead>
-        <tbody id="tasks"><tr><td colspan="4" class="empty">尚无任务，请在上方粘贴链接后点击「开始下载」</td></tr></tbody>
+        <tbody id="tasks"><tr class="empty-row"><td colspan="4" class="empty">尚无任务，请在上方粘贴链接后点击「开始下载」</td></tr></tbody>
       </table>
     </div>
   </section>
 
   <section class="card">
-    <h2><span class="step">5</span>运行日志</h2>
-    <pre id="log"></pre>
+    <h2><span class="step passive">5</span>运行日志</h2>
+    <pre id="log">（暂无日志）</pre>
   </section>
+
+  <footer class="foot">
+    版本 <span id="app-ver-foot">v1.5.0</span> ·
+    <a href="https://github.com/tau625/ShudaoLe" target="_blank" rel="noopener">GitHub 项目页</a> ·
+    教材版权归原出版方，本工具仅供个人学习备份，请于下载后24小时内删除
+  </footer>
 </div>
+<button id="btn-to-top" class="to-top" title="回到顶部" aria-label="回到顶部">↑</button>
 
 <script>
   const $ = s => document.querySelector(s);
@@ -506,7 +635,17 @@
     if (!n && n !== 0) return '';
     if (n < 1024) return n + ' B';
     if (n < 1048576) return (n / 1024).toFixed(1) + ' KB';
-    return (n / 1048576).toFixed(1) + ' MB';
+    if (n < 1073741824) return (n / 1048576).toFixed(1) + ' MB';
+    return (n / 1073741824).toFixed(2) + ' GB';
+  }
+
+  // M7：计数变化的轻量强调（300ms pop，动画结束后自动摘掉类）
+  function popCount(el) {
+    if (!el) return;
+    el.classList.remove('count-pop');
+    void el.offsetWidth;   // 强制回流，允许连续触发时重启动画
+    el.classList.add('count-pop');
+    el.addEventListener('animationend', () => el.classList.remove('count-pop'), { once: true });
   }
 
   function badge(status) {
@@ -519,10 +658,33 @@
     return `<span class="badge ${cls}">${text}</span>`;
   }
 
+  // H2：任务表内容签名——轮询内容与上次一致时跳过重建，
+  // 避免 hover 每 1.5s 闪断、「打开文件」等按钮焦点丢失；日志单独按行数判断。
+  let _lastRenderSig = null;
+  let _lastLogLen = -1;
+
   function render(s) {
+    const sig = JSON.stringify([s.items, s.summary, s.running, s.cancel]);
+    if (sig !== _lastRenderSig) {
+      _lastRenderSig = sig;
+      renderTable(s);
+    }
+
+    // 日志按行数增量刷新；仅当用户本来就在底部时才跟随滚底，上翻不再被拽回。
+    const logLen = s.log ? s.log.length : 0;
+    if (logLen !== _lastLogLen) {
+      _lastLogLen = logLen;
+      const log = $('#log');
+      const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 24;
+      log.textContent = (s.log && s.log.length) ? s.log.join('\n') : '（暂无日志）';
+      if (atBottom) log.scrollTop = log.scrollHeight;
+    }
+  }
+
+  function renderTable(s) {
     const tb = $('#tasks');
     if (!s.items.length) {
-      tb.innerHTML = '<tr><td colspan="4" class="empty">尚无任务，请在上方粘贴链接后点击「开始下载」</td></tr>';
+      tb.innerHTML = '<tr class="empty-row"><td colspan="4" class="empty">尚无任务，请在上方粘贴链接后点击「开始下载」</td></tr>';
     } else {
       tb.innerHTML = s.items.map(it => {
         let bar, size = '';
@@ -574,10 +736,6 @@
     $('#btn-start').disabled = s.running;
     $('#btn-stop').disabled = !s.running;
     $('#btn-stop').textContent = s.cancel ? '正在停止...' : '停止';
-
-    const log = $('#log');
-    log.textContent = (s.log && s.log.length) ? s.log.join('\n') : '（暂无日志）';
-    log.scrollTop = log.scrollHeight;
   }
 
   // 追踪"运行中"状态，用于检测一次下载任务从运行 → 结束的瞬间，
@@ -817,6 +975,28 @@
         }
       } catch (e) {}
     }, { every: 3000 });
+  })();
+
+  // L9：令牌明文切换
+  const btnTokenToggle = $('#btn-token-toggle');
+  if (btnTokenToggle) {
+    const tokenInput = $('#token');
+    btnTokenToggle.onclick = () => {
+      const show = tokenInput.type === 'password';
+      tokenInput.type = show ? 'text' : 'password';
+      btnTokenToggle.textContent = show ? '隐藏' : '显示';
+      tokenInput.focus();
+    };
+  }
+
+  // L1：回到顶部小圆钮
+  (function () {
+    const btnTop = $('#btn-to-top');
+    if (!btnTop) return;
+    const onScroll = () => { btnTop.classList.toggle('show', window.scrollY > 600); };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+    btnTop.onclick = () => window.scrollTo({ top: 0, behavior: 'smooth' });
   })();
 
   /* ---------- 目录筛选选教材 ----------
@@ -1062,7 +1242,8 @@
     const f = currentFilters();
     const keys = Object.keys(f);
     const resetBtn = $('#btn-reset-filters');
-    if (resetBtn) resetBtn.hidden = !keys.length;
+    // L17：visibility 常驻占位，出现/消失不再引起筛选行回流跳动
+    if (resetBtn) resetBtn.style.visibility = keys.length ? 'visible' : 'hidden';
     if (!keys.length) { box.hidden = true; box.innerHTML = ''; return; }
     box.hidden = false;
     box.innerHTML = '<span class="chips-label">已选条件</span>'
@@ -1075,11 +1256,16 @@
     $('#btn-clear-filters').onclick = clearAllFilters;
   }
 
+  let _lastCatTotal = null;
+
   function renderRows() {
     const tbody = $('#cat-body');
     const truncated = TOTAL > ROWS.length;
-    $('#cat-count').textContent = `命中 ${TOTAL} 条`
+    const cnt = $('#cat-count');
+    cnt.textContent = `命中 ${TOTAL} 条`
       + (truncated ? `（展示前 ${ROWS.length} 条）` : '');
+    if (_lastCatTotal !== null && _lastCatTotal !== TOTAL) popCount(cnt);   // M7
+    _lastCatTotal = TOTAL;
     const btnAll = $('#btn-add-all');
     btnAll.disabled = !ROWS.length;
     btnAll.textContent = truncated && TOTAL
@@ -1105,7 +1291,7 @@
         return `<button class="ghost small-btn" data-relax="${escapeHtml(h.dim)}">`
           + `去掉「${escapeHtml(h.label)}：${escapeHtml(h.value)}」→ ${h.count} 条</button>`;
       }).join('');
-      tbody.innerHTML = `<tr><td colspan="6" class="empty"><div>没有匹配的教材。`
+      tbody.innerHTML = `<tr class="empty-row"><td colspan="6" class="empty"><div>没有匹配的教材。`
         + (tips ? `放宽其中一个条件即可找回结果：</div><div class="hint-row">${tips}</div>`
                 : `试试放宽筛选条件</div>`)
         + `</td></tr>`;
@@ -1127,7 +1313,7 @@
       const pub = [x.publisher, x.pub_variant].filter(Boolean).join(' · ') || '-';
       const done = ADDED.has(x.id);
       return `
-      <tr>
+      <tr${done ? ' class="is-added"' : ''}>
         <td class="name" title="${escapeHtml(x.title)}">${escapeHtml(x.title)}</td>
         <td>${escapeHtml(x.grade || '-')}</td>
         <td>${escapeHtml(x.subject || '-')}</td>
@@ -1274,13 +1460,23 @@
     kwTimer = setTimeout(() => reload(), 300);
   };
   $('#btn-reload-catalog').onclick = () => {
+    const btn = $('#btn-reload-catalog');
+    btn.disabled = true;
+    btn.textContent = '刷新中…';   // M6：异步期间加载态，防重复点击
     $('#cat-status').textContent = '刷新中（需重新下载约 40MB，请稍候）...';
-    reload(true);
+    reload(true).catch(() => {}).finally(() => {
+      btn.disabled = false;
+      btn.textContent = '刷新目录';
+    });
   };
   $('#btn-add-all').onclick = async () => {
+    const btnAll = $('#btn-add-all');
     // 界面只展示了前 N 条时先向后端要全量 id，否则用户以为加了全部，
     // 实际只加进当前这一屏（截断是静默的，很容易被忽略）。
     if (TOTAL > ROWS.length) {
+      const oldText = btnAll.textContent;
+      btnAll.disabled = true;
+      btnAll.textContent = '加入中…';   // M6：取全量 id 期间的加载态
       try {
         const p = filterParams();
         p.set('ids_only', '1');
@@ -1293,6 +1489,10 @@
           return;
         }
       } catch (e) { /* 取全量失败则回退为只加当前展示的 */ }
+      finally {
+        btnAll.disabled = false;
+        btnAll.textContent = oldText;
+      }
     }
     const n = appendIds(ROWS.map(x => x.id));
     renderRows();
@@ -1308,12 +1508,51 @@
     setTimeout(() => ta.classList.remove('flash'), 1200);
   };
 
-  // 导出当前筛选结果为 CSV（带 BOM，Excel 直接打开不乱码）
-  $('#btn-export-csv').onclick = () => {
+  // 导出当前筛选结果为 CSV（带 BOM，Excel 直接打开不乱码）。
+  // M5：结果被截断时（TOTAL > ROWS.length）先取全量 id，再按 500/批调
+  // resolve-entries 补全元数据，保证导出完整书单而非仅当前展示页；
+  // resolve 失败的条目退化为空列，按钮异步期间呈加载态；非截断时行为不变。
+  $('#btn-export-csv').onclick = async () => {
     if (!ROWS.length) return;
+    const btnCsv = $('#btn-export-csv');
     const esc = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+    let rows = ROWS;
+    if (TOTAL > ROWS.length) {
+      btnCsv.disabled = true;
+      btnCsv.textContent = '导出中…';
+      try {
+        const p = filterParams();
+        p.set('ids_only', '1');
+        const r = await fetch('/api/facets?' + p.toString());
+        const j = await r.json();
+        const ids = (j.ok && j.ids) || [];
+        const meta = {};
+        for (let i = 0; i < ids.length; i += 500) {   // 后端单次 resolve 上限 500
+          try {
+            const rr = await fetch('/api/resolve-entries?ids=' +
+              encodeURIComponent(ids.slice(i, i + 500).join(',')));
+            const jj = await rr.json();
+            ((jj && jj.entries) || []).forEach(e => { meta[e.id] = e; });
+          } catch (e) { /* 该批失败：对应行各列留空 */ }
+        }
+        if (ids.length) {
+          rows = ids.map(id => {
+            const x = meta[id] || {};
+            return {
+              title: x.title || '', grade: x.grade || '', subject: x.subject || '',
+              volume: x.volume || x.module || '', publisher: x.publisher || '',
+              pub_variant: x.pub_variant || '', audience: x.audience || '',
+            };
+          });
+        }
+      } catch (e) { /* 取全量失败退回当前展示行 */ }
+      finally {
+        btnCsv.disabled = false;
+        btnCsv.textContent = '导出 CSV';
+      }
+    }
     const lines = [['教材名称', '年级', '科目', '册次', '版本', '用书'].join(',')].concat(
-      ROWS.map(x => [
+      rows.map(x => [
         x.title, x.grade || '', x.subject || '', x.volume || x.module || '',
         [x.publisher, x.pub_variant].filter(Boolean).join(' · '),
         x.audience === '教师用书' ? '教师用书' : (x.audience || '学生用书'),
@@ -1384,9 +1623,9 @@
     guarded($('#switch-stu'), () => { if (AUD !== '学生用书') { AUD = '学生用书'; viewsSave(); viewsSync(); reload(); } });
     guarded($('#switch-tea'), () => { if (AUD !== '教师用书') { AUD = '教师用书'; viewsSave(); viewsSync(); reload(); } });
 
-    // radiogroup 方向键导航（WAI-ARIA 惯例）：Left/Up 上一项，Right/Down 下一项。
+    // 开关组方向键导航（沿用原 radiogroup 键位惯例，role 已改为语义更准的 group）：Left/Up 上一项，Right/Down 下一项。
     // 走 click() 复用 guarded 逻辑——置灰项只提示不切换。
-    document.querySelectorAll('.sys-switch-group[role="radiogroup"]').forEach(grp => {
+    document.querySelectorAll('.sys-switch-group[role="group"]').forEach(grp => {
       grp.addEventListener('keydown', ev => {
         if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].indexOf(ev.key) < 0) return;
         const btns = Array.prototype.slice.call(grp.querySelectorAll('.sys-switch'));
@@ -1488,10 +1727,13 @@
     const countEl = $('#link-count');
     const badgeEl = $('#token-badge');
     if (!linksTa || !countEl || !badgeEl) return;
+    let lastLinkN = null;
     function refreshMeta() {
       const n = linksTa.value.split('\n')
         .filter(s => s.trim() && !s.trim().startsWith('#')).length;
       countEl.textContent = n ? n + ' 条链接' : '';
+      if (lastLinkN !== null && lastLinkN !== n) popCount(countEl);   // M7
+      lastLinkN = n;
       // 清单文本可能被任何渠道改动（手动编辑/粘贴/找回链接/程序化赋值），
       // 每次刷新都对账 ADDED 与徽标，保证「已加入 ✓」和构成摘要不脱节
       syncAddedFromLinks();
@@ -1535,10 +1777,140 @@
       var el = document.getElementById('app-ver');
       if (el && d && d.version && d.version !== 'unknown') {
         el.textContent = 'v' + d.version;
+        var foot = document.getElementById('app-ver-foot');
+        if (foot) foot.textContent = el.textContent;   // L2：页脚版本号同步
       }
     })
     .catch(function () { /* 网络异常时保留静态兜底值 */ });
 })();
+
+/* ---- 暗夜模式切换 ----
+   主题实际生效在 <head> 里的防闪烁预备脚本（body 渲染前写 data-theme）；
+   这里只负责：按钮图标同步、点击切换并记住选择、无显式选择时跟随系统变化。
+   三态语义：localStorage 无记录 = 跟随系统（初始态）；点一下 = 固定该主题。 */
+(function () {
+  var btn = document.getElementById('btn-theme');
+  if (!btn) return;
+  var KEY = 'shudaole.theme';
+  function darkQuery() {
+    return window.matchMedia && matchMedia('(prefers-color-scheme: dark)');
+  }
+  function paint(t) {
+    document.documentElement.dataset.theme = t;
+    btn.textContent = t === 'dark' ? '☀️' : '🌙';
+    btn.title = t === 'dark' ? '切换到亮色模式' : '切换到暗色模式';
+    btn.setAttribute('aria-label', btn.title);
+  }
+  function stored() {
+    try { return localStorage.getItem(KEY); } catch (e) { return null; }
+  }
+  paint(document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light');
+  btn.onclick = function () {
+    var next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
+    paint(next);
+    try { localStorage.setItem(KEY, next); } catch (e) { /* 仅本次会话生效 */ }
+  };
+  var mq = darkQuery();
+  if (mq && mq.addEventListener) {
+    mq.addEventListener('change', function (ev) {
+      var s = stored();
+      if (s !== 'light' && s !== 'dark') paint(ev.matches ? 'dark' : 'light');
+    });
+  }
+})();
+
+/* ---- H1/M1/M8：横幅共用构件 ----
+   旧实现把横幅 insertBefore 到 body 顶层，大屏上横贯视口、与 1080px 卡片列错位；
+   统一改为挂进 .wrap 首位。颜色走设计 token，圆角归 6px 档。
+   （顶层声明即全局：块三的 makeBanner / showUpdateModal、块四的确认弹窗均复用） */
+function bannerMountPoint() {
+  return document.querySelector('.wrap') || document.body;
+}
+function insertBannerAtTop(bar) {
+  var mount = bannerMountPoint();
+  mount.insertBefore(bar, mount.firstChild);
+}
+function mkBannerButton(text, css) {
+  var b = document.createElement('button');
+  b.textContent = text;
+  b.style.cssText = css;
+  return b;
+}
+// 更新横幅构建（本块 showUpdateBanner 与块三 makeBanner 共用，消除两份重复代码）
+function makeUpdateBar(info) {
+  var bar = document.createElement('div');
+  bar.id = 'update-banner';
+  bar.style.cssText = 'margin:8px 0;padding:8px 12px;border:1px solid var(--accent);' +
+    'border-radius:6px;background:var(--info-bg);color:var(--info-fg);font-size:13px;' +
+    'display:flex;gap:10px;align-items:center;flex-wrap:wrap';
+  var size = info.asset_size ? '（约 ' + (info.asset_size / 1048576).toFixed(1) + ' MB）' : '';
+  bar.innerHTML = '<span>发现新版本 v' + info.latest + size +
+    '，建议更新以获得最新修复。</span>';
+  var btnView = mkBannerButton('查看新版发布页',
+    'padding:3px 10px;border:1px solid var(--accent);border-radius:6px;' +
+    'background:var(--accent);color:#fff;cursor:pointer');
+  btnView.onclick = function () {
+    fetch('/api/open', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target: info.html_url, mode: 'url' })
+    }).catch(function () { window.open(info.html_url, '_blank'); });
+  };
+  bar.appendChild(btnView);
+  if (info.zip_url) {
+    var btnDl = mkBannerButton('下载安装包',
+      'padding:3px 10px;border:1px solid var(--info-fg);border-radius:6px;' +
+      'background:#fff;color:var(--info-fg);cursor:pointer');
+    btnDl.title = '用浏览器下载新版本安装包，自行决定安装时机';
+    btnDl.onclick = function () {
+      btnDl.disabled = true;
+      btnDl.textContent = '正在打开下载...';
+      // 经浏览器打开下载链接（让浏览器接管下载进度与保存位置，服务端零压力）
+      fetch('/api/open', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target: info.zip_url, mode: 'url' })
+      }).then(function (r) {
+        if (!r.ok) throw new Error('open-failed');
+        btnDl.textContent = '已在浏览器开始下载';
+      }).catch(function () {
+        window.open(info.zip_url, '_blank');
+        btnDl.textContent = '已打开下载链接';
+      });
+    };
+    bar.appendChild(btnDl);
+  }
+  var btnClose = mkBannerButton('×',
+    'padding:6px 10px;border:none;background:none;color:var(--muted);cursor:pointer;font-size:15px');
+  btnClose.className = 'js-banner-close';   // L20 热区已放大；供块三把「一键更新」插到 × 之前
+  btnClose.title = '关闭提示';
+  btnClose.onclick = function () { bar.remove(); };
+  bar.appendChild(btnClose);
+  return bar;
+}
+
+/* H3：弹窗共用——入场动画类 + dialog 语义 + ESC 关闭 + 初始焦点。返回 close()。 */
+function openOverlayModal(overlay, box) {
+  overlay.classList.add('modal-overlay');
+  box.classList.add('modal-box');
+  box.setAttribute('role', 'dialog');
+  box.setAttribute('aria-modal', 'true');
+  box.tabIndex = -1;
+  box.style.outline = 'none';
+  var closed = false;
+  function onKey(e) { if (e.key === 'Escape') close(); }
+  function close() {
+    if (closed) return;
+    closed = true;
+    document.removeEventListener('keydown', onKey, true);
+    overlay.remove();
+  }
+  overlay.addEventListener('click', function (e) { if (e.target === overlay) close(); });
+  document.addEventListener('keydown', onKey, true);
+  document.body.appendChild(overlay);
+  box.focus();
+  return close;
+}
 
 // ---- P2-2 会话恢复横幅（纯追加，不改动上方任何逻辑）----
 (function () {
@@ -1548,18 +1920,17 @@
       if (!d || !d.pending) return;
       var bar = document.createElement('div');
       bar.id = 'resume-banner';
-      bar.style.cssText = 'margin:8px 0;padding:8px 12px;border:1px solid #b23a2e;' +
-        'border-radius:6px;background:#fdf6f0;color:#7a2d24;font-size:13px;' +
+      bar.style.cssText = 'margin:8px 0;padding:8px 12px;border:1px solid var(--primary);' +
+        'border-radius:6px;background:var(--note-bg);color:var(--primary-hover);font-size:13px;' +
         'display:flex;gap:10px;align-items:center;flex-wrap:wrap';
       var done = (d.counts && d.counts.ok) || 0;
       var total = (d.counts && d.counts.total) || 0;
       bar.innerHTML =
         '<span>检测到上次未完成的下载任务（已完成 ' + done + '/' + total +
         '），链接已找回，可粘贴到输入框继续（已下载的会自动跳过）。</span>';
-      var btnKeep = document.createElement('button');
-      btnKeep.textContent = '找回链接';
-      btnKeep.style.cssText = 'padding:3px 10px;border:1px solid #b23a2e;' +
-        'border-radius:4px;background:#b23a2e;color:#fff;cursor:pointer';
+      var btnKeep = mkBannerButton('找回链接',
+        'padding:3px 10px;border:1px solid var(--primary);border-radius:6px;' +
+        'background:var(--primary);color:#fff;cursor:pointer');
       btnKeep.onclick = function () {
         var box = document.getElementById('links');
         if (box) {
@@ -1572,10 +1943,9 @@
           bar.remove();
         }
       };
-      var btnDrop = document.createElement('button');
-      btnDrop.textContent = '不再提示';
-      btnDrop.style.cssText = 'padding:3px 10px;border:1px solid #ccc;' +
-        'border-radius:4px;background:#fff;color:#666;cursor:pointer';
+      var btnDrop = mkBannerButton('不再提示',
+        'padding:3px 10px;border:1px solid var(--line);border-radius:6px;' +
+        'background:#fff;color:var(--muted);cursor:pointer');
       btnDrop.onclick = function () {
         fetch('/api/discard-session', { method: 'POST' })
           .then(function () { bar.remove(); })
@@ -1583,67 +1953,15 @@
       };
       bar.appendChild(btnKeep);
       bar.appendChild(btnDrop);
-      var mount = document.body;
-      mount.insertBefore(bar, mount.firstChild);
+      insertBannerAtTop(bar);
     })
     .catch(function () { /* 查询失败静默 */ });
 })();
 // ---- P2-5 更新检查横幅（纯追加，不改动上方任何逻辑）----
 (function () {
   function showUpdateBanner(info) {
-    var bar = document.createElement('div');
-    bar.id = 'update-banner';
-    bar.style.cssText = 'margin:8px 0;padding:8px 12px;border:1px solid #2e6da4;' +
-      'border-radius:6px;background:#eef4fa;color:#1d4f76;font-size:13px;' +
-      'display:flex;gap:10px;align-items:center;flex-wrap:wrap';
-    var size = info.asset_size ? '（约 ' + (info.asset_size / 1048576).toFixed(1) + ' MB）' : '';
-    bar.innerHTML = '<span>发现新版本 v' + info.latest + size +
-      '，建议更新以获得最新修复。</span>';
-    var btnView = document.createElement('button');
-    btnView.textContent = '查看新版发布页';
-    btnView.style.cssText = 'padding:3px 10px;border:1px solid #2e6da4;' +
-      'border-radius:4px;background:#2e6da4;color:#fff;cursor:pointer';
-    btnView.onclick = function () {
-      fetch('/api/open', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ target: info.html_url, mode: 'url' })
-      }).catch(function () { window.open(info.html_url, '_blank'); });
-    };
-    bar.appendChild(btnView);
-    if (info.zip_url) {
-      var btnDl = document.createElement('button');
-      btnDl.textContent = '下载安装包';
-      btnDl.title = '用浏览器下载新版本安装包，自行决定安装时机';
-      btnDl.style.cssText = 'padding:3px 10px;border:1px solid #1d4f76;' +
-        'border-radius:4px;background:#fff;color:#1d4f76;cursor:pointer';
-      btnDl.onclick = function () {
-        btnDl.disabled = true;
-        btnDl.textContent = '正在打开下载...';
-        // 经浏览器打开下载链接（让浏览器接管下载进度与保存位置，服务端零压力）
-        fetch('/api/open', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ target: info.zip_url, mode: 'url' })
-        }).then(function (r) {
-          if (!r.ok) throw new Error('open-failed');
-          btnDl.textContent = '已在浏览器开始下载';
-        }).catch(function () {
-          window.open(info.zip_url, '_blank');
-          btnDl.textContent = '已打开下载链接';
-        });
-      };
-      bar.appendChild(btnDl);
-    }
-    var btnClose = document.createElement('button');
-    btnClose.textContent = '×';
-    btnClose.title = '关闭提示';
-    btnClose.style.cssText = 'padding:3px 8px;border:none;background:none;' +
-      'color:#888;cursor:pointer;font-size:15px';
-    btnClose.onclick = function () { bar.remove(); };
-    bar.appendChild(btnClose);
-    var mount = document.body;
-    mount.insertBefore(bar, mount.firstChild);
+    // H1：构建逻辑收敛到块顶共用 makeUpdateBar（token 化 + 挂进 .wrap 首位）
+    insertBannerAtTop(makeUpdateBar(info));
   }
   // 启动后延迟 1.5s 查询（避开首屏关键请求）；无新版/失败静默
   setTimeout(function () {
@@ -1667,8 +1985,8 @@
   }).catch(function () {});
 
   function btnStyle() {
-    return 'padding:3px 10px;border:1px solid #1d4f76;border-radius:4px;' +
-      'background:#fff;color:#1d4f76;cursor:pointer';
+    return 'padding:3px 10px;border:1px solid var(--info-fg);border-radius:6px;' +
+      'background:#fff;color:var(--info-fg);cursor:pointer';
   }
 
   function pollStatus(onState) {
@@ -1735,19 +2053,22 @@
     }
   }
 
+  var noteTimer = null;
   function showNote(text) {
     var n = document.getElementById('update-note');
     if (!n) {
       n = document.createElement('div');
       n.id = 'update-note';
-      n.style.cssText = 'margin:4px 0;font-size:12px;color:#a05a2c;';
-      var mount = document.body;
+      n.style.cssText = 'margin:4px 0;font-size:12px;color:var(--warning-fg);';
+      var wrap = bannerMountPoint();   // H1：与横幅同列，不再挂 body 顶层
       var bar = document.getElementById('update-banner');
-      if (bar) mount.insertBefore(n, bar.nextSibling);
-      else mount.insertBefore(n, mount.firstChild);
+      if (bar) wrap.insertBefore(n, bar.nextSibling);
+      else wrap.insertBefore(n, wrap.firstChild);
     }
     n.textContent = text;
-    setTimeout(function () { if (n) n.remove(); }, 6000);
+    // L8：连续提示时先清掉上一个定时器，避免前一条被提前摘除
+    if (noteTimer) clearTimeout(noteTimer);
+    noteTimer = setTimeout(function () { if (n) n.remove(); }, 6000);
   }
 
   function addAutoUpdateButton(bar) {
@@ -1757,7 +2078,9 @@
     btn.textContent = '一键更新';
     btn.style.cssText = btnStyle();
     btn.onclick = function () { startDownload(btn); };
-    bar.appendChild(btn);
+    var closeBtn = bar.querySelector('.js-banner-close');
+    if (closeBtn) bar.insertBefore(btn, closeBtn);   // 主操作排在 × 之前
+    else bar.appendChild(btn);
     // 若下载已在后台进行（横幅被关过又重建），恢复按钮状态
     fetch('/api/update-status').then(function (r) { return r.json(); })
       .then(function (st) {
@@ -1779,36 +2102,11 @@
   // 手动检查发现新版而旧横幅不存在时（页面开得比检查晚/横幅被关），
   // 自己建一条横幅：结构与旧版一致，按钮接线到本脚本的自动更新逻辑
   function makeBanner(info) {
-    var bar = document.createElement('div');
-    bar.id = 'update-banner';
-    bar.style.cssText = 'margin:8px 0;padding:8px 12px;border:1px solid #2e6da4;' +
-      'border-radius:6px;background:#eef4fa;color:#1d4f76;font-size:13px;' +
-      'display:flex;gap:10px;align-items:center;flex-wrap:wrap';
-    var size = info.asset_size ? '（约 ' + (info.asset_size / 1048576).toFixed(1) + ' MB）' : '';
-    bar.innerHTML = '<span>发现新版本 v' + info.latest + size +
-      '，建议更新以获得最新修复。</span>';
-    var btnView = document.createElement('button');
-    btnView.textContent = '查看新版发布页';
-    btnView.style.cssText = 'padding:3px 10px;border:1px solid #2e6da4;' +
-      'border-radius:4px;background:#2e6da4;color:#fff;cursor:pointer';
-    btnView.onclick = function () {
-      fetch('/api/open', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ target: info.html_url, mode: 'url' })
-      }).catch(function () { window.open(info.html_url, '_blank'); });
-    };
-    bar.appendChild(btnView);
-    var btnClose = document.createElement('button');
-    btnClose.textContent = '×';
-    btnClose.title = '关闭提示';
-    btnClose.style.cssText = 'padding:3px 8px;border:none;background:none;' +
-      'color:#888;cursor:pointer;font-size:15px';
-    btnClose.onclick = function () { bar.remove(); };
-    var mount = document.body;
-    mount.insertBefore(bar, mount.firstChild);
+    // H1：与块二共用 makeUpdateBar（消除重复构建代码），挂进 .wrap 首位
+    if (typeof makeUpdateBar !== 'function' || typeof insertBannerAtTop !== 'function') return;
+    var bar = makeUpdateBar(info);
+    insertBannerAtTop(bar);
     addAutoUpdateButton(bar);
-    bar.appendChild(btnClose);
   }
 
   // 检查更新结果弹窗：明确告知是否最新；发现新版时提供「一键更新」「手动更新」与
@@ -1821,16 +2119,16 @@
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(30,20,10,.45);' +
       'z-index:9999;display:flex;align-items:center;justify-content:center';
     var box = document.createElement('div');
-    box.style.cssText = 'background:#fffdf8;border:1px solid #b23a2e;border-radius:10px;' +
+    box.style.cssText = 'background:var(--card);border:1px solid var(--primary);border-radius:10px;' +
       'max-width:420px;width:88%;padding:22px 26px;box-shadow:0 10px 34px rgba(0,0,0,.28);' +
-      'font-size:14px;color:#3a2a20;line-height:1.6';
+      'font-size:14px;color:var(--text);line-height:1.6';
     var cur = (document.getElementById('app-ver') || {}).textContent || '';
     if (!latest) {
-      box.innerHTML = '<div style="font-size:16px;font-weight:600;color:#b23a2e;margin-bottom:8px">✓ 已是最新版本</div>' +
+      box.innerHTML = '<div style="font-size:16px;font-weight:600;color:var(--primary);margin-bottom:8px">✓ 已是最新版本</div>' +
         '<div>当前版本 ' + escapeHtml(cur || '') + ' 已是最新，无需更新。</div>';
     } else {
       var size = latest.asset_size ? '（约 ' + (latest.asset_size / 1048576).toFixed(1) + ' MB）' : '';
-      box.innerHTML = '<div style="font-size:16px;font-weight:600;color:#b23a2e;margin-bottom:8px">发现新版本 v' +
+      box.innerHTML = '<div style="font-size:16px;font-weight:600;color:var(--primary);margin-bottom:8px">发现新版本 v' +
         escapeHtml(latest.latest) + '</div>' +
         '<div>当前版本 ' + escapeHtml(cur) + ' → 最新版本 <b>v' + escapeHtml(latest.latest) + '</b>' + size +
         '。建议更新以获得最新修复与功能。</div>';
@@ -1841,12 +2139,13 @@
       var b = document.createElement('button');
       b.textContent = text;
       b.style.cssText = 'padding:6px 14px;border-radius:6px;cursor:pointer;font-size:13px;' +
-        (primary ? 'background:#b23a2e;color:#fff;border:1px solid #b23a2e;'
-                 : 'background:#fff;color:#666;border:1px solid #ccc;');
+        (primary ? 'background:var(--primary);color:#fff;border:1px solid var(--primary);'
+                 : 'background:#fff;color:var(--muted);border:1px solid var(--line);');
       return b;
     }
+    var close = function () {};
     var btnClose = mkBtn('关闭');
-    btnClose.onclick = function () { overlay.remove(); };
+    btnClose.onclick = function () { close(); };
     row.appendChild(btnClose);
     if (latest) {
       var btnView = mkBtn('查看新版发布页');
@@ -1854,9 +2153,9 @@
         fetch('/api/open', { method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ target: latest.html_url, mode: 'url' }) })
           .catch(function () { window.open(latest.html_url, '_blank'); });
-        overlay.remove();
+        close();
       };
-      row.insertBefore(btnView, btnClose);
+      row.appendChild(btnView);
       // 手动更新：交给浏览器下载更新包，用户自己决定何时安装（程序内不干预）
       if (latest.zip_url) {
         var btnManual = mkBtn('下载安装包');
@@ -1866,31 +2165,29 @@
             body: JSON.stringify({ target: latest.zip_url, mode: 'url' }) })
             .then(function (r) { if (!r.ok) throw new Error('open-failed'); })
             .catch(function () { window.open(latest.zip_url, '_blank'); });
-          overlay.remove();
+          close();
         };
-        row.insertBefore(btnManual, btnView);
+        row.appendChild(btnManual);
       }
       var btnDl = mkBtn('一键更新', true);
       btnDl.onclick = function () {
         startDownload(btnDl);
         pollStatus(function (s) { paintButton(btnDl, s); });
       };
-      row.insertBefore(btnDl, btnView);
+      row.appendChild(btnDl);   // M9：主按钮固定在最右，与下载确认弹窗一致
     }
     box.appendChild(row);
     overlay.appendChild(box);
-    overlay.addEventListener('click', function (e) { if (e.target === overlay) overlay.remove(); });
-    document.body.appendChild(overlay);
+    close = openOverlayModal(overlay, box);   // H3：入场动画 + dialog 语义 + ESC + 焦点
   }
 
   // 手动检查更新入口：footer 版本号旁加一个「检查更新」小按钮
   var ver = document.getElementById('app-ver');
   if (ver && ver.parentElement) {
     var chk = document.createElement('button');
+    chk.className = 'ghost small-btn';   // M10：复用统一按钮样式，去掉内联 cssText
+    chk.style.marginLeft = '8px';
     chk.textContent = '检查更新';
-    chk.style.cssText = 'margin-left:8px;padding:1px 8px;font-size:12px;' +
-      'border:1px solid #ccc;border-radius:4px;background:#fff;color:#666;' +
-      'cursor:pointer';
     chk.onclick = function () {
       chk.disabled = true;
       chk.textContent = '检查中...';
@@ -1974,7 +2271,8 @@
           b.textContent = '⚠ ' + set.size + '版并存';
           b.title = '该年级科目的教材有 ' + set.size + ' 个版本，请确认是孩子学校使用的版本再下载';
           b.style.cssText = 'display:inline-block;margin-left:4px;padding:0 5px;font-size:11px;' +
-            'color:#a05a2c;background:#fdf1e3;border:1px solid #e8c9a0;border-radius:8px;white-space:nowrap';
+            'color:var(--warning-fg);background:var(--warning-bg);border:1px solid var(--warning-border);' +
+            'border-radius:6px;white-space:nowrap';
           pubCell.appendChild(b);
         }
         // 版本悬浮提示
@@ -1994,17 +2292,17 @@
     overlay.style.cssText = 'position:fixed;inset:0;background:rgba(30,20,10,.45);' +
       'z-index:9999;display:flex;align-items:center;justify-content:center';
     var box = document.createElement('div');
-    box.style.cssText = 'background:#fffdf8;border:1px solid #b23a2e;border-radius:10px;' +
+    box.style.cssText = 'background:var(--card);border:1px solid var(--primary);border-radius:10px;' +
       'max-width:560px;width:92%;max-height:80vh;display:flex;flex-direction:column;' +
-      'padding:20px 24px;box-shadow:0 10px 34px rgba(0,0,0,.28);font-size:13px;color:#3a2a20';
+      'padding:20px 24px;box-shadow:0 10px 34px rgba(0,0,0,.28);font-size:13px;color:var(--text)';
     var riskN = entries.filter(function (e) { return e.multi_version_risk; }).length;
-    var html = '<div style="font-size:15px;font-weight:600;color:#b23a2e;margin-bottom:6px">下载前确认</div>';
-    if (riskN) html += '<div style="background:#fdf1e3;border:1px solid #e8c9a0;border-radius:6px;' +
-      'padding:6px 10px;margin-bottom:8px;color:#a05a2c">⚠ 检测到 <b>' + riskN + '</b> 本教材的年级科目存在多个版本，' +
+    var html = '<div style="font-size:15px;font-weight:600;color:var(--primary);margin-bottom:6px">下载前确认</div>';
+    if (riskN) html += '<div style="background:var(--warning-bg);border:1px solid var(--warning-border);border-radius:6px;' +
+      'padding:6px 10px;margin-bottom:8px;color:var(--warning-fg)">⚠ 检测到 <b>' + riskN + '</b> 本教材的年级科目存在多个版本，' +
       '请核对版本是否为孩子学校所用（悬浮版本名可见识别提示）</div>';
     html += '<div style="margin-bottom:4px">将下载 <b>' + entries.length + '</b> 本教材' +
-      (missing ? '（<span style="color:#a05a2c">' + missing + ' 条链接未识别，下载时将按链接处理</span>）' : '') +
-      '　→　<span style="color:#666">' + escapeHtml(outDir || (window.__DEF_OUT_DIR__ || 'downloads')) + '</span></div>';
+      (missing ? '（<span style="color:var(--warning-fg)">' + missing + ' 条链接未识别，下载时将按链接处理</span>）' : '') +
+      '　→　<span style="color:var(--muted)">' + escapeHtml(outDir || (window.__DEF_OUT_DIR__ || 'downloads')) + '</span></div>';
     var MAXSHOW = 50;
     // 按「来源视图 · 学段」分组展示：清单是跨视图累积的，平铺列表看不出
     // “六三制加的”和“五四制加的”，分组后用户核对时对得上自己的操作轨迹。
@@ -2017,21 +2315,21 @@
           + (info.tea ? '·教师用书' : '');
       var head = '';
       if (g !== lastG) {
-        head = '<div style="margin:6px 0 2px;font-size:12px;font-weight:600;color:#6b5d45">── '
+        head = '<div style="margin:6px 0 2px;font-size:12px;font-weight:600;color:var(--muted)">── '
           + escapeHtml(g) + ' ──</div>';
         lastG = g;
       }
       return head +
-        '<div style="padding:3px 0;border-bottom:1px dashed #eee">' +
-        (e.multi_version_risk ? '<span style="color:#c47b3a">⚠</span> ' : '') +
+        '<div style="padding:3px 0;border-bottom:1px dashed var(--line-soft)">' +
+        (e.multi_version_risk ? '<span style="color:var(--warning-fg)">⚠</span> ' : '') +
         '<b>' + escapeHtml(e.title) + '</b>' +
-        '<span style="color:#888">　' + escapeHtml([e.grade, e.subject].filter(Boolean).join(' · ')) + '</span>' +
-        (e.publisher ? '　<span title="' + escapeHtml(e.publisher_meta || '') + '" style="color:#b23a2e">[' + escapeHtml(e.publisher) + ']</span>' : '') +
-        (e.audience === '教师用书' ? '　<span style="color:#a05a2c">「教师用书」</span>' : '') +
+        '<span style="color:var(--muted)">　' + escapeHtml([e.grade, e.subject].filter(Boolean).join(' · ')) + '</span>' +
+        (e.publisher ? '　<span title="' + escapeHtml(e.publisher_meta || '') + '" style="color:var(--primary)">[' + escapeHtml(e.publisher) + ']</span>' : '') +
+        (e.audience === '教师用书' ? '　<span style="color:var(--warning-fg)">「教师用书」</span>' : '') +
         '</div>';
     }).join('');
-    html += '<div style="overflow:auto;border:1px solid #eee;border-radius:6px;padding:8px 10px;margin:6px 0;flex:1">' + rows +
-      (entries.length > MAXSHOW ? '<div style="color:#888;padding-top:6px">… 等共 ' + entries.length + ' 本</div>' : '') + '</div>';
+    html += '<div style="overflow:auto;border:1px solid var(--line-soft);border-radius:6px;padding:8px 10px;margin:6px 0;flex:1">' + rows +
+      (entries.length > MAXSHOW ? '<div style="color:var(--muted);padding-top:6px">… 等共 ' + entries.length + ' 本</div>' : '') + '</div>';
     box.innerHTML = html;
     var rowBtn = document.createElement('div');
     rowBtn.style.cssText = 'display:flex;gap:10px;justify-content:flex-end;padding-top:8px';
@@ -2039,19 +2337,19 @@
       var b = document.createElement('button');
       b.textContent = t;
       b.style.cssText = 'padding:6px 16px;border-radius:6px;cursor:pointer;font-size:13px;' +
-        (primary ? 'background:#b23a2e;color:#fff;border:1px solid #b23a2e;'
-                 : 'background:#fff;color:#666;border:1px solid #ccc;');
+        (primary ? 'background:var(--primary);color:#fff;border:1px solid var(--primary);'
+                 : 'background:#fff;color:var(--muted);border:1px solid var(--line);');
       return b;
     }
+    var close = function () {};
     var back = mkBtn('返回检查');
-    back.onclick = function () { overlay.remove(); };
+    back.onclick = function () { close(); };
     var ok = mkBtn('确认下载', true);
-    ok.onclick = function () { overlay.remove(); onOk(); };
+    ok.onclick = function () { close(); onOk(); };
     rowBtn.appendChild(back); rowBtn.appendChild(ok);
     box.appendChild(rowBtn);
     overlay.appendChild(box);
-    overlay.addEventListener('click', function (e) { if (e.target === overlay) overlay.remove(); });
-    document.body.appendChild(overlay);
+    close = openOverlayModal(overlay, box);   // H3：入场动画 + dialog 语义 + ESC + 焦点
   }
 
   var btnStart = document.getElementById('btn-start');
@@ -2096,13 +2394,13 @@
     var wrap = document.getElementById('quick-combos');
     if (!wrap) {
       var filterRow = document.querySelector('.row[data-filters], #filters, form .row');
-      var scopeNote = document.querySelector('.scope-note');
+      // M2：锚点跟随卡片①的说明折叠块（原 .scope-note 已改为 details.scope-help）
+      var scopeNote = document.querySelector('.scope-note, .scope-help');
       wrap = document.createElement('div');
-      wrap.id = 'quick-combos';
-      wrap.style.cssText = 'margin:6px 0 2px;display:flex;gap:8px;flex-wrap:wrap;align-items:center';
+      wrap.id = 'quick-combos';   // M2/M13：容器与芯片样式已收进样式表（token 化，间距 12/0）
       var lab = document.createElement('span');
+      lab.className = 'combos-label';
       lab.textContent = '常用组合：';
-      lab.style.cssText = 'font-size:12px;color:#8a7f6d';
       wrap.appendChild(lab);
       (scopeNote || filterRow || document.body).parentElement
         .insertBefore(wrap, scopeNote ? scopeNote.nextSibling : wrap);
@@ -2110,12 +2408,10 @@
     wrap.querySelectorAll('button.js-combo').forEach(function (b) { b.remove(); });
     (combos || []).forEach(function (c) {
       var b = document.createElement('button');
-      b.className = 'js-combo';
+      b.className = 'js-combo';   // M2：样式收进样式表，与 chips 同一套设计 token
       b.textContent = c.label;
       var m = c.publisher_meta || '';
       b.title = m || ('一键选中：' + c.phase + ' + ' + c.publisher);
-      b.style.cssText = 'padding:2px 10px;font-size:12px;border:1px solid #d8cdb8;border-radius:14px;' +
-        'background:#faf6ee;color:#6b5d45;cursor:pointer';
       b.onclick = function () {
         // 替换式应用：清空全部筛选控件再设组合的学段，版本经 pendingPub
         // 一次性覆盖参数在首次请求即生效——旧年级/科目/关键词不再残留，
