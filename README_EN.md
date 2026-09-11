@@ -16,7 +16,7 @@ A command-line + web-UI tool for downloading textbook PDFs from China's National
 
 ## Demo
 
-https://github.com/user-attachments/assets/4a75252c-47d5-4176-afe8-aef7a8be2ac6
+https://github.com/user-attachments/assets/00436e57-246b-4ec6-bec4-df8710fb2154
 
 > **Full v1.5.0 tour video** (5 min master; the player above is the 1.5× version, 3 min 20 s).
 > Covers: textbook views (6-3 / 5-4 school systems, special education, student/teacher books)

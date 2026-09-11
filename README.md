@@ -15,7 +15,7 @@
 
 ## 功能演示
 
-https://github.com/user-attachments/assets/4a75252c-47d5-4176-afe8-aef7a8be2ac6
+https://github.com/user-attachments/assets/00436e57-246b-4ec6-bec4-df8710fb2154
 
 > **v1.5.0 完整演示片**（母版 5 分钟，此处为 1.5 倍速版 3 分 20 秒）。
 > 内容：教材视图栏（六三/五四、特殊教育、学生/教师用书）→ 五级级联筛选 → 常用组合
