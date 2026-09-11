@@ -36,6 +36,8 @@ REPO_URL = f"https://github.com/{REPO}"
 PACKAGE_ID = "tau625.ShudaoLe"
 PUBLISHER = "tau625"
 PACKAGE_NAME = "ShudaoLe (Book Arrived)"
+# Moniker（短别名）：让用户可以 winget install shudaole 简短安装；全小写、无空格
+MONIKER = "shudaole"
 # 必须用 SPDX 官方标识符（连字符版）；写成 "PolyForm Noncommercial 1.0.0"
 # 不是合法 SPDX 表达式，winget-pkgs 审核会挑
 LICENSE_NAME = "PolyForm-Noncommercial-1.0.0"
@@ -218,7 +220,7 @@ Description: >-
   It filters by education stage, grade, subject and publisher, and serves a
   local web UI in your browser — no browser extension, no account, no
   third-party mirrors.
-Moniker: shudaole
+Moniker: {MONIKER}
 Tags:
 - education
 - textbook
