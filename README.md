@@ -15,9 +15,9 @@
 
 ## 功能演示
 
-[![书到了 v1.5.0 功能演示 · 点封面播放](docs/promo-cover.png)](https://github.com/tau625/ShudaoLe/releases/download/v1.5.0/ShudaoLe-1.5.0-promo-1.5x.mp4)
+https://github.com/user-attachments/assets/d5e93d19-4a88-430d-bb58-749e5cc1bb5e
 
-> **v1.5.0 完整演示片**（母版 5 分钟；点封面即在浏览器播放 1.5 倍速版，3 分 20 秒）。
+> **v1.5.0 完整演示片**（母版 5 分钟，此处为 1.5 倍速版 3 分 20 秒）。
 > 内容：教材视图栏（六三/五四、特殊教育、学生/教师用书）→ 五级级联筛选 → 常用组合
 > → 下载清单与断点续传 → 暗夜模式 → 平台变更防御 → CSV 全量导出 → 开源、安装与版权说明。
 >

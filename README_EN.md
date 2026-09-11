@@ -16,9 +16,9 @@ A command-line + web-UI tool for downloading textbook PDFs from China's National
 
 ## Demo
 
-[![ShudaoLe v1.5.0 feature tour · click the cover to play](docs/promo-cover.png)](https://github.com/tau625/ShudaoLe/releases/download/v1.5.0/ShudaoLe-1.5.0-promo-1.5x.mp4)
+https://github.com/user-attachments/assets/d5e93d19-4a88-430d-bb58-749e5cc1bb5e
 
-> **Full v1.5.0 tour video** (5 min master; clicking the cover plays the 1.5× version, 3 min 20 s).
+> **Full v1.5.0 tour video** (5 min master; the player above is the 1.5× version, 3 min 20 s).
 > Covers: textbook views (6-3 / 5-4 school systems, special education, student/teacher books)
 > → five-level cascading filters → saved filter presets → download cart & resumable downloads
 > → dark mode → platform-change defenses → full CSV export → open source, install, licensing.
