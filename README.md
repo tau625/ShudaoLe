@@ -15,11 +15,12 @@
 
 ## 功能演示
 
-https://github.com/user-attachments/assets/d5e93d19-4a88-430d-bb58-749e5cc1bb5e
+https://github.com/user-attachments/assets/4a75252c-47d5-4176-afe8-aef7a8be2ac6
 
 > **v1.5.0 完整演示片**（母版 5 分钟，此处为 1.5 倍速版 3 分 20 秒）。
 > 内容：教材视图栏（六三/五四、特殊教育、学生/教师用书）→ 五级级联筛选 → 常用组合
-> → 下载清单与断点续传 → 暗夜模式 → 平台变更防御 → CSV 全量导出 → 开源、安装与版权说明。
+> → 下载清单与断点续传 → 暗夜模式 → 平台变更防御 → CSV 全量导出 → 开源、安装与版权说明
+> → 后记：七天、六十三次提交推送，二十一个正式版本是怎么来的。
 >
 > 下载：[1.5 倍速版 29 MB](https://github.com/tau625/ShudaoLe/releases/download/v1.5.0/ShudaoLe-1.5.0-promo-1.5x.mp4)
 > · [5 分钟原速版 44 MB](https://github.com/tau625/ShudaoLe/releases/download/v1.5.0/ShudaoLe-1.5.0-promo-5min.mp4)
