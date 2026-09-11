@@ -9,6 +9,7 @@
 ```
 packaging/winget/
 ├── gen_manifests.py    # 清单生成器，每次发版后跑一次
+├── submit_pr.sh        # 零克隆提 PR（国内网络专用，走 GitHub API）
 ├── README.md           # 本文件
 └── manifests/
     └── t/tau625/ShudaoLe/<version>/   # 与 winget-pkgs 仓库路径完全同构
@@ -44,35 +45,76 @@ python packaging/winget/gen_manifests.py --file <setup.exe>  # 对本地文件�
 
 ## 提交 PR 到 microsoft/winget-pkgs
 
-winget 目录不走 API，靠 PR 合入。完整流程：
-
 > ⚠️ **首次收录只提交最新版本（1.5.0）**，不要把 `manifests/t/tau625/ShudaoLe/` 下的
 > 六个历史版本目录一起塞进去——winget-pkgs 规定「一个 PR 只改一个包的一个版本目录」，
 > 多版本会直接被 bot 拒。历史版本清单留在仓库里当存档就够，不需要提交。
 > 收录成功后再发新版，才是每次一个 `Add version` PR。
 
-```powershell
-# 1. fork https://github.com/microsoft/winget-pkgs 到自己账号下，然后：
-git clone https://github.com/tau625/winget-pkgs
-cd winget-pkgs
+### ⚠️ 国内网络：别 clone，走 API（已实测）
 
-# 2. 把生成好的清单原样拷进 manifests/
-xcopy /E /I /Y "D:\01_Projects\smartedu-教材下载器\packaging\winget\manifests\t" manifests\t\
+网上教程都让你 `git clone https://github.com/microsoft/winget-pkgs`，**国内这条路走不通**：
 
-# 3. 分支 + 提交（commit message 有格式要求，bot 会检查）
-git checkout -b tau625.ShudaoLe-1.5.0
-git add manifests/t/tau625/ShudaoLe
-git commit -m "Add version: tau625.ShudaoLe version 1.5.0"
-git push -u origin tau625.ShudaoLe-1.5.0
+| 操作 | 实测结果 |
+|---|---|
+| `git ls-remote`（小请求） | ✅ 1.65 s |
+| `git push`（小 pack） | ✅ 正常 |
+| GitHub REST API | ✅ 正常 |
+| **clone 大 pack 下载** | ❌ **~8.5 KB/s** |
 
-# 4. 到 GitHub 上对 microsoft/winget-pkgs 的 master 开 PR，等自动校验 + 人工审核
+winget-pkgs 的历史有 **866 MB**，实测拉了 5 分钟只到 **5.0 MB**，之后长时间零增量——
+`--depth 1 --filter=blob:none --sparse` 同样卡死（`tmp_pack` 停在 5 MB 不动）。
+卡的只是**大 pack 下载**，别的都通。
+
+所以用 `submit_pr.sh`，全程 REST API，总流量几十 KB：
+
+```bash
+# 1. 体检 + 打印计划（不产生任何 GitHub 操作）
+bash packaging/winget/submit_pr.sh --dry-run
+
+# 2. 真提交：自动 fork → 建分支 → 上传 3 个清单 → 开 PR
+bash packaging/winget/submit_pr.sh
+
+# 也可以指定版本
+bash packaging/winget/submit_pr.sh 1.5.0
 ```
 
-提交前可本地校验清单合法性（Windows）：
+脚本做的事（**幂等，可放心重跑**——会先删同名分支再重建）：
 
-```powershell
-winget validate "D:\01_Projects\smartedu-教材下载器\packaging\winget\manifests\t\tau625\ShudaoLe\1.5.0"
+1. `gh repo view` 查 fork；没有就 `gh repo fork --clone=false`（服务端复制，不下载到本地）
+2. `gh repo sync --branch master` 把 fork 对齐上游
+3. 建分支 `tau625.ShudaoLe-<version>`（基于 fork 的 master）
+4. Contents API 逐个 PUT 清单文件（每个文件一个 commit，合并时 squash 无妨）
+5. `gh pr create` 开 PR，标题 `New package: tau625.ShudaoLe version <version>`
+
+`--dry-run` 会顺带跑 `winget validate`（用 `cygpath` 把 Git Bash 的 `/d/...` 转成
+winget 认的 `D:\...`），清单不合法会直接中止。
+
+### 备选：网页端手动建文件（零工具链）
+
+不想用脚本时，浏览器里同样能做，也不下载仓库：
+
+1. 打开 https://github.com/microsoft/winget-pkgs/fork 建 fork（服务端操作，秒级）
+2. 进自己 fork 的页面 → **Add file → Create new file**
+3. 文件名框里填**完整路径** `manifests/t/tau625/ShudaoLe/1.5.0/tau625.ShudaoLe.yaml`（斜杠会自动变成目录）
+4. 把本地同名文件的**全部内容**粘进去 → `Commit changes`
+5. 另外两个文件重复 3~4 步
+6. 回 microsoft/winget-pkgs，点 **Compare & pull request** 开 PR
+
+需要建的三个文件：
+
 ```
+manifests/t/tau625/ShudaoLe/1.5.0/tau625.ShudaoLe.yaml
+manifests/t/tau625/ShudaoLe/1.5.0/tau625.ShudaoLe.installer.yaml
+manifests/t/tau625/ShudaoLe/1.5.0/tau625.ShudaoLe.locale.en-US.yaml
+```
+
+### 其它注意
+
+- **PR 只能来自 fork**，不能直接往 `microsoft/winget-pkgs` 推。
+- 想手动校验清单（Windows PowerShell）：
+  `winget validate "D:\01_Projects\smartedu-教材下载器\packaging\winget\manifests\t\tau625\ShudaoLe\1.5.0"`
+- 提交后自动验证 + 人工审核都跑在**微软的机器**上（校验 schema、把 InstallerUrl 下载下来
+  比对 Sha256、恶意软件扫描），跟你的国内网络无关，不用挂代理等结果。
 
 ## 实现细节备忘（改代码前先读）
 
@@ -108,9 +150,17 @@ winget validate "D:\01_Projects\smartedu-教材下载器\packaging\winget\manife
 - 首次 PR 需要签微软 CLA（PR 页面上 bot 会提示，网页里点一下即可）。
 - 提交后自动验证管线会校验：清单 schema、InstallerSha256 与 URL 文件一致、
   恶意软件扫描；通过后还有人工审核（一般 1~7 天）。微软保留以任何理由拒绝的权利。
-- 提交前本地自测：
-  `winget validate <清单目录>`；更彻底用 winget-pkgs 的 `Tools\SandboxTest.ps1`
-  在 Windows Sandbox 里实际静默装一遍。
+- 提交前本地自测，两步：
+  1. `bash packaging/winget/submit_pr.sh --dry-run`——自动跑 `winget validate` + 全链路体检；
+  2. 更彻底一点，真的装一遍（需要 UAC，会写进 Program Files）：
+     ```powershell
+     winget settings --enable LocalManifestFiles
+     cd D:\01_Projects\smartedu-教材下载器\packaging\winget\manifests\t\tau625\ShudaoLe\1.5.0
+     winget install --manifest .
+     winget list --id tau625.ShudaoLe     # 能列出来才说明 ARP 匹配对了
+     winget uninstall --id tau625.ShudaoLe
+     ```
+  再彻底就用 winget-pkgs 的 `Tools\SandboxTest.ps1` 在 Windows Sandbox 里静默装一遍。
 
 ## 同名与所有权：别人能抢注吗？
 
