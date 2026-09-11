@@ -61,8 +61,19 @@ fi
 # ── 2. 体检 ──────────────────────────────────────────────────────────────
 step "体检"
 
-gh auth status >/dev/null 2>&1 || die "gh 未登录，先跑 gh auth login"
-ok "gh 已登录"
+# gh 在本机的 keyring 不稳定：gh auth status / gh repo fork 可能误报未登录。
+# 统一从 git credential 取 token 注入 GH_TOKEN，一次解决所有 gh 子命令的认证。
+if [ -z "${GH_TOKEN:-}" ]; then
+  _tok="$(printf "protocol=https\nhost=github.com\n\n" | git credential fill 2>/dev/null \
+    | sed -n 's/^password=//p' || true)"
+  if [ -n "$_tok" ]; then
+    export GH_TOKEN="$_tok"
+    ok "已从 git credential 注入 GH_TOKEN"
+  fi
+fi
+
+gh auth token >/dev/null 2>&1 || die "gh 无可用 token，先跑 gh auth login"
+ok "gh token 可用"
 
 [ -d "$SRC_DIR" ] || die "清单目录不存在：$SRC_DIR（先跑 gen_manifests.py --fetch）"
 FILES=("$SRC_DIR"/*.yaml)
