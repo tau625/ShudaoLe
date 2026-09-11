@@ -15,10 +15,15 @@
 
 ## 功能演示
 
-https://github.com/user-attachments/assets/2e59032c-0cc7-4e00-802e-52b620c795b5
+[![书到了 v1.5.0 功能演示 · 点封面播放](docs/promo-cover.png)](https://github.com/tau625/ShudaoLe/releases/download/v1.5.0/ShudaoLe-1.5.0-promo-1.5x.mp4)
 
-> 演示内容：获取令牌 → 级联筛选 → 批量下载 → 打开文件（1 分 56 秒，1.5 倍速）。
-> 更高画质见 [v1.2.0 Release 附件](https://github.com/tau625/ShudaoLe/releases/download/v1.2.0/shudaole-demo-1.5x.mp4)。
+> **v1.5.0 完整演示片**（母版 5 分钟；点封面即在浏览器播放 1.5 倍速版，3 分 20 秒）。
+> 内容：教材视图栏（六三/五四、特殊教育、学生/教师用书）→ 五级级联筛选 → 常用组合
+> → 下载清单与断点续传 → 暗夜模式 → 平台变更防御 → CSV 全量导出 → 开源、安装与版权说明。
+>
+> 下载：[1.5 倍速版 29 MB](https://github.com/tau625/ShudaoLe/releases/download/v1.5.0/ShudaoLe-1.5.0-promo-1.5x.mp4)
+> · [5 分钟原速版 44 MB](https://github.com/tau625/ShudaoLe/releases/download/v1.5.0/ShudaoLe-1.5.0-promo-5min.mp4)
+> · [Web 压缩版 6 MB](https://github.com/tau625/ShudaoLe/releases/download/v1.5.0/ShudaoLe-1.5.0-promo-web.mp4)
 
 ## 下载与安装
 
