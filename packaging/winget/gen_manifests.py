@@ -36,7 +36,9 @@ REPO_URL = f"https://github.com/{REPO}"
 PACKAGE_ID = "tau625.ShudaoLe"
 PUBLISHER = "tau625"
 PACKAGE_NAME = "ShudaoLe (Book Arrived)"
-LICENSE_NAME = "PolyForm Noncommercial 1.0.0"
+# 必须用 SPDX 官方标识符（连字符版）；写成 "PolyForm Noncommercial 1.0.0"
+# 不是合法 SPDX 表达式，winget-pkgs 审核会挑
+LICENSE_NAME = "PolyForm-Noncommercial-1.0.0"
 LICENSE_URL = f"{REPO_URL}/blob/main/LICENSE"
 # 必须与 installer.iss 的 UninstallDisplayName 完全一致（含全角括号）：
 # Inno 会把它写进 ARP 注册表 DisplayName，winget 靠它匹配已安装应用
@@ -169,13 +171,19 @@ ManifestVersion: {MANIFEST_VERSION}
 PackageIdentifier: {PACKAGE_ID}
 PackageVersion: {version}
 InstallerType: inno
+# installer.iss 是 PrivilegesRequired=admin + {{autopf}}：装到 Program Files，
+# Scope 与 ElevationRequirement 两个语义都要声明（缺 Scope 时
+# winget install --scope machine/user 无法按范围过滤到这个包）
+Scope: machine
 InstallModes:
 - interactive
 - silent
 - silentWithProgress
+# 显式写全（与 winget 对 inno 的默认值一致）：一旦清单里给了 Silent，
+# winget 就不再叠加自己的默认参数，缺 /SUPPRESSMSGBOXES 会漏掉对话框抑制
 InstallerSwitches:
-  Silent: /VERYSILENT /NORESTART
-  SilentWithProgress: /SILENT /NORESTART
+  Silent: /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-
+  SilentWithProgress: /SILENT /SUPPRESSMSGBOXES /NORESTART /SP-
 UpgradeBehavior: install
 Installers:
 - Architecture: x64
@@ -244,11 +252,12 @@ def main() -> None:
     elif args.fetch:
         sha256 = fetch_setup_sha256(version)
     else:
-        local = REPO_ROOT / f"ShudaoLe-{version}-setup.exe"
-        if local.exists():
-            sha256 = sha256_of(local)
-        else:
-            sha256 = fetch_setup_sha256(version)
+        # 默认一律以公开发布源为准，不拿本地文件凑。
+        # PyInstaller 产物不可复现：本地构建的 setup.exe 与 CI 传到 Release 的那个
+        # SHA256 不同。v1.5.0 的清单就是在 Release 挂出前 50 分钟用本地产物生成的，
+        # InstallerSha256 一提交就会被 winget-pkgs 的 hash 校验打回。
+        # 发版前想先预生成草稿，显式传 --file。
+        sha256 = fetch_setup_sha256(version)
 
     if not re.fullmatch(r"[0-9a-f]{64}", sha256):
         sys.exit(f"SHA256 格式不合法：{sha256!r}")

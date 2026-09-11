@@ -19,6 +19,14 @@ packaging/winget/
 
 ## 每次发版后：生成新版本清单
 
+> ⚠️ **顺序不能反：必须等 Release 把 `ShudaoLe-<version>-setup.exe` 挂完之后，再跑生成器。**
+>
+> PyInstaller 产物不可复现——本地构建的安装包与 CI 传到 Release 的那个 SHA256 不同。
+> v1.5.0 的清单就是在 Release 挂出前 50 分钟生成的，`InstallerSha256` 记的是本地产物的
+> 哈希（`352c34…`），而 Release 上实际是 `1a624b…`；这样提交必定被 winget-pkgs 的
+> hash 校验打回。生成器现已改为**默认只认 Release 的值**，本地文件只在显式传 `--file`
+> （发版前预生成草稿）时才用。
+
 ```powershell
 # 版本号自动从 version_info.txt 读取；SHA256 自动从 Release 的 SHA256SUMS.txt 获取
 python packaging/winget/gen_manifests.py --fetch
@@ -38,6 +46,11 @@ python packaging/winget/gen_manifests.py --file <setup.exe>  # 对本地文件�
 
 winget 目录不走 API，靠 PR 合入。完整流程：
 
+> ⚠️ **首次收录只提交最新版本（1.5.0）**，不要把 `manifests/t/tau625/ShudaoLe/` 下的
+> 六个历史版本目录一起塞进去——winget-pkgs 规定「一个 PR 只改一个包的一个版本目录」，
+> 多版本会直接被 bot 拒。历史版本清单留在仓库里当存档就够，不需要提交。
+> 收录成功后再发新版，才是每次一个 `Add version` PR。
+
 ```powershell
 # 1. fork https://github.com/microsoft/winget-pkgs 到自己账号下，然后：
 git clone https://github.com/tau625/winget-pkgs
@@ -47,10 +60,10 @@ cd winget-pkgs
 xcopy /E /I /Y "D:\01_Projects\smartedu-教材下载器\packaging\winget\manifests\t" manifests\t\
 
 # 3. 分支 + 提交（commit message 有格式要求，bot 会检查）
-git checkout -b tau625.ShudaoLe-1.3.8
+git checkout -b tau625.ShudaoLe-1.5.0
 git add manifests/t/tau625/ShudaoLe
-git commit -m "Add version: tau625.ShudaoLe version 1.3.8"
-git push -u origin tau625.ShudaoLe-1.3.8
+git commit -m "Add version: tau625.ShudaoLe version 1.5.0"
+git push -u origin tau625.ShudaoLe-1.5.0
 
 # 4. 到 GitHub 上对 microsoft/winget-pkgs 的 master 开 PR，等自动校验 + 人工审核
 ```
@@ -58,7 +71,7 @@ git push -u origin tau625.ShudaoLe-1.3.8
 提交前可本地校验清单合法性（Windows）：
 
 ```powershell
-winget validate "D:\01_Projects\smartedu-教材下载器\packaging\winget\manifests\t\tau625\ShudaoLe\1.3.8"
+winget validate "D:\01_Projects\smartedu-教材下载器\packaging\winget\manifests\t\tau625\ShudaoLe\1.5.0"
 ```
 
 ## 实现细节备忘（改代码前先读）
@@ -72,6 +85,15 @@ winget validate "D:\01_Projects\smartedu-教材下载器\packaging\winget\manife
   与应用内自动更新（update.py → 静默安装）互不冲突。
 - **ManifestVersion** 固定 1.12.0（winget-pkgs 审核推荐版本，1.10.0 也接受；
   如 bot 提示升级 schema，改 `gen_manifests.py` 里的 `MANIFEST_VERSION` 重新生成即可）。
+- **License 必须写 SPDX 标识符**：`PolyForm-Noncommercial-1.0.0`（连字符版）。
+  写成 `PolyForm Noncommercial 1.0.0` 能过 winget 的本地 schema 校验，但它不是合法
+  SPDX 表达式，人工审核会被挑。
+- **`Scope: machine` 和 `ElevationRequirement: elevationRequired` 是两个维度，都要写**：
+  前者是安装范围（`winget install --scope machine/user` 靠它过滤），后者是提权需求。
+  只写后者时，按 scope 筛选的安装命令匹配不到这个包。
+- **静默参数要写全**：一旦清单里给了 `InstallerSwitches.Silent`，winget 就不再叠加
+  自己的默认值。所以 `/SUPPRESSMSGBOXES`、`/SP-` 得自己带上（当前值与 winget 对 inno
+  的默认值一致）。
 - **首次收录**会走单独的 `Add package` PR；之后每个新版本一个 `Add version` PR。
 
 ## 限制与前提条件（提交前自查）
